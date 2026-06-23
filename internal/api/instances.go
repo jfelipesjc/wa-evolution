@@ -132,3 +132,15 @@ func (s *Server) handleSetWebhook(w http.ResponseWriter, r *http.Request) {
 	resp.Webhook.URL = url
 	s.writeJSON(w, http.StatusOK, resp)
 }
+
+// handleFindWebhook: GET /webhook/find/{instance} -> {enabled, url}. Reports the
+// persisted/configured webhook URL for the instance.
+func (s *Server) handleFindWebhook(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	if !s.backend.Exists(name) {
+		s.writeError(w, http.StatusNotFound, "instance not found")
+		return
+	}
+	url := s.dispatcher.url(name)
+	s.writeJSON(w, http.StatusOK, findWebhookResp{Enabled: url != "", URL: url})
+}

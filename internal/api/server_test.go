@@ -40,6 +40,26 @@ type fakeBackend struct {
 	messages map[string][]StoredMsg // jid -> stored
 	numbers  []NumberStatus
 	groups   []GroupArg
+
+	presences []sentPresence
+	reads     []sentRead
+	created   []groupCreateCall
+	partOps   []partUpdateCall
+	inviteFor string
+}
+
+type sentPresence struct{ name, jid, presence string }
+type sentRead struct {
+	name, jid string
+	ids       []string
+}
+type groupCreateCall struct {
+	name, subject string
+	participants  []string
+}
+type partUpdateCall struct {
+	name, groupJID, action string
+	participants           []string
 }
 
 func newFakeBackend() *fakeBackend {
@@ -136,6 +156,49 @@ func (f *fakeBackend) GroupMetadata(ctx context.Context, name, jid string) (Grou
 		return GroupArg{}, ErrInstanceNotFound
 	}
 	return f.groups[0], nil
+}
+
+func (f *fakeBackend) SendPresence(ctx context.Context, name, jid, presence string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.presences = append(f.presences, sentPresence{name, jid, presence})
+	return nil
+}
+
+func (f *fakeBackend) MarkRead(ctx context.Context, name, jid string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reads = append(f.reads, sentRead{name, jid, ids})
+	return nil
+}
+
+func (f *fakeBackend) GroupCreate(ctx context.Context, name, subject string, participants []string) (GroupArg, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.created = append(f.created, groupCreateCall{name, subject, participants})
+	return GroupArg{JID: "999@g.us", Subject: subject}, nil
+}
+
+func (f *fakeBackend) GroupUpdateParticipants(ctx context.Context, name, groupJID, action string, participants []string) ([]ParticipantResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.partOps = append(f.partOps, partUpdateCall{name, groupJID, action, participants})
+	out := make([]ParticipantResult, 0, len(participants))
+	for _, p := range participants {
+		out = append(out, ParticipantResult{JID: p, Status: "200"})
+	}
+	return out, nil
+}
+
+func (f *fakeBackend) GroupInviteCode(ctx context.Context, name, groupJID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.inviteFor = groupJID
+	return "INVITE123", nil
+}
+
+func (f *fakeBackend) GroupLeave(ctx context.Context, name, groupJID string) error {
+	return nil
 }
 
 // --- helpers ---
@@ -666,5 +729,339 @@ func TestRunEventPump_FeedsChatStoreAndDispatches(t *testing.T) {
 	msgs := cs.ChatMessages("5512@s.whatsapp.net", 10)
 	if len(msgs) != 1 || msgs[0].Text != "hey" {
 		t.Fatalf("chatstore messages = %+v", msgs)
+	}
+}
+
+// --- sendPresence ---
+
+func TestSendPresence_Composing(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+
+	rec := do(t, h, "POST", "/chat/sendPresence/bot1", testKey, sendPresenceReq{Number: "5512999", Presence: "composing"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr statusResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Status != "SUCCESS" {
+		t.Fatalf("status = %q", sr.Status)
+	}
+	if len(fb.presences) != 1 || fb.presences[0].jid != "5512999@s.whatsapp.net" || fb.presences[0].presence != "composing" {
+		t.Fatalf("presence recorded %+v", fb.presences)
+	}
+}
+
+func TestSendPresence_GlobalNoNumber(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/sendPresence/bot1", testKey, sendPresenceReq{Presence: "available"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.presences) != 1 || fb.presences[0].presence != "available" {
+		t.Fatalf("presence recorded %+v", fb.presences)
+	}
+}
+
+func TestSendPresence_BadValue(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/sendPresence/bot1", testKey, sendPresenceReq{Number: "5512", Presence: "dancing"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestSendPresence_Unauthorized(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/sendPresence/bot1", "", sendPresenceReq{Number: "5512", Presence: "composing"})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+// --- markMessageAsRead ---
+
+func TestMarkRead_ReadMessagesForm(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/markMessageAsRead/bot1", testKey, markReadReq{
+		ReadMessages: []readKey{{RemoteJID: "5512999", ID: "A1"}, {RemoteJID: "5512999", ID: "A2"}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.reads) != 1 || fb.reads[0].jid != "5512999@s.whatsapp.net" || len(fb.reads[0].ids) != 2 {
+		t.Fatalf("reads recorded %+v", fb.reads)
+	}
+}
+
+func TestMarkRead_NumberIDsForm(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/markMessageAsRead/bot1", testKey, markReadReq{
+		Number: "5512999", IDs: []string{"B1"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.reads) != 1 || fb.reads[0].ids[0] != "B1" {
+		t.Fatalf("reads recorded %+v", fb.reads)
+	}
+}
+
+func TestMarkRead_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/markMessageAsRead/bot1", testKey, markReadReq{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestMarkRead_Unauthorized(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/markMessageAsRead/bot1", "", markReadReq{Number: "5512", IDs: []string{"X"}})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+// --- chat/check alias ---
+
+func TestChatCheck_AliasOfWhatsAppNumbers(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.numbers = []NumberStatus{{Number: "5512999", JID: "5512999@s.whatsapp.net", Exists: true}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/check/bot1", testKey, whatsappNumbersReq{Numbers: []string{"5512999"}})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []numberStatus
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || !out[0].Exists {
+		t.Fatalf("out = %+v", out)
+	}
+}
+
+// --- group/create ---
+
+func TestGroupCreate(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/create/bot1", testKey, groupCreateReq{
+		Subject: "My Group", Participants: []string{"5512999", "5513888"},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var g groupRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &g)
+	if g.Subject != "My Group" || g.ID != "999@g.us" {
+		t.Fatalf("group = %+v", g)
+	}
+	if len(fb.created) != 1 || fb.created[0].participants[0] != "5512999@s.whatsapp.net" {
+		t.Fatalf("created = %+v", fb.created)
+	}
+}
+
+func TestGroupCreate_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/create/bot1", testKey, groupCreateReq{Participants: []string{"5512"}})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestGroupCreate_Unauthorized(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/create/bot1", "", groupCreateReq{Subject: "x"})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+// --- group/updateParticipant ---
+
+func TestUpdateParticipant(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/updateParticipant/bot1", testKey, updateParticipantReq{
+		GroupJID: "123@g.us", Action: "add", Participants: []string{"5512999"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []participantResult
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || out[0].Status != "200" {
+		t.Fatalf("out = %+v", out)
+	}
+	if len(fb.partOps) != 1 || fb.partOps[0].action != "add" || fb.partOps[0].participants[0] != "5512999@s.whatsapp.net" {
+		t.Fatalf("partOps = %+v", fb.partOps)
+	}
+}
+
+func TestUpdateParticipant_BadAction(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/updateParticipant/bot1", testKey, updateParticipantReq{
+		GroupJID: "123@g.us", Action: "explode", Participants: []string{"5512"},
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+// --- group/inviteCode ---
+
+func TestInviteCode(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/group/inviteCode/bot1?groupJid=123@g.us", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var ic inviteCodeResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &ic)
+	if ic.InviteCode != "INVITE123" || ic.InviteURL != "https://chat.whatsapp.com/INVITE123" {
+		t.Fatalf("inviteCode = %+v", ic)
+	}
+	if fb.inviteFor != "123@g.us" {
+		t.Fatalf("inviteFor = %q", fb.inviteFor)
+	}
+}
+
+func TestInviteCode_MissingJID(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/group/inviteCode/bot1", testKey, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+// --- group/leave ---
+
+func TestLeaveGroup(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/leave/bot1", testKey, leaveGroupReq{GroupJID: "123@g.us"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr statusResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Status != "SUCCESS" {
+		t.Fatalf("status = %q", sr.Status)
+	}
+}
+
+func TestLeaveGroup_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/leave/bot1", testKey, leaveGroupReq{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+// --- webhook/find + persistence ---
+
+func TestFindWebhook(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	srv := New(Options{APIKey: testKey, Backend: fb, Logger: log.New(io.Discard, "", 0)})
+	h := srv.Handler()
+
+	// No webhook yet -> enabled false.
+	rec := do(t, h, "GET", "/webhook/find/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var fw findWebhookResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &fw)
+	if fw.Enabled || fw.URL != "" {
+		t.Fatalf("expected disabled, got %+v", fw)
+	}
+
+	// Set then find.
+	_ = do(t, h, "POST", "/webhook/set/bot1", testKey, setWebhookReq{URL: "http://example/hook"})
+	rec = do(t, h, "GET", "/webhook/find/bot1", testKey, nil)
+	_ = json.Unmarshal(rec.Body.Bytes(), &fw)
+	if !fw.Enabled || fw.URL != "http://example/hook" {
+		t.Fatalf("find after set = %+v", fw)
+	}
+}
+
+func TestFindWebhook_NotFound(t *testing.T) {
+	fb := newFakeBackend()
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/webhook/find/ghost", testKey, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestFindWebhook_Unauthorized(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/webhook/find/bot1", "", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+// TestWebhookPersistence verifies the webhook URL survives a "restart": a second
+// Server constructed over the same WebhookDir loads the persisted sidecar file.
+func TestWebhookPersistence(t *testing.T) {
+	dir := t.TempDir()
+
+	fb1 := newFakeBackend()
+	_ = fb1.Create("bot1")
+	srv1 := New(Options{APIKey: testKey, Backend: fb1, Logger: log.New(io.Discard, "", 0), WebhookDir: dir})
+	h1 := srv1.Handler()
+	rec := do(t, h1, "POST", "/webhook/set/bot1", testKey, setWebhookReq{URL: "http://persist/hook"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set status = %d", rec.Code)
+	}
+
+	// New server over the same dir: the URL must be reloaded.
+	fb2 := newFakeBackend()
+	_ = fb2.Create("bot1")
+	srv2 := New(Options{APIKey: testKey, Backend: fb2, Logger: log.New(io.Discard, "", 0), WebhookDir: dir})
+	if got := srv2.Dispatcher().url("bot1"); got != "http://persist/hook" {
+		t.Fatalf("reloaded url = %q, want http://persist/hook", got)
+	}
+
+	// Remove drops the sidecar so a third server does not see it.
+	srv2.Dispatcher().remove("bot1")
+	srv3 := New(Options{APIKey: testKey, Backend: newFakeBackend(), Logger: log.New(io.Discard, "", 0), WebhookDir: dir})
+	if got := srv3.Dispatcher().url("bot1"); got != "" {
+		t.Fatalf("url after remove = %q, want empty", got)
 	}
 }

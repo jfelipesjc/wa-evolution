@@ -47,6 +47,29 @@ type Backend interface {
 	Groups(ctx context.Context, name string) ([]GroupArg, error)
 	// GroupMetadata returns metadata for one group.
 	GroupMetadata(ctx context.Context, name, jid string) (GroupArg, error)
+
+	// SendPresence sets typing/availability. For composing|paused it targets the
+	// given chat jid (per-chat typing); for available|unavailable it is a global
+	// presence and jid is ignored.
+	SendPresence(ctx context.Context, name, jid, presence string) error
+	// MarkRead sends read receipts for the given message ids on a chat.
+	MarkRead(ctx context.Context, name, jid string, ids []string) error
+
+	// GroupCreate creates a new group and returns its metadata.
+	GroupCreate(ctx context.Context, name, subject string, participants []string) (GroupArg, error)
+	// GroupUpdateParticipants adds/removes/promotes/demotes members; returns the
+	// per-participant result.
+	GroupUpdateParticipants(ctx context.Context, name, groupJID, action string, participants []string) ([]ParticipantResult, error)
+	// GroupInviteCode returns the group's current invite code.
+	GroupInviteCode(ctx context.Context, name, groupJID string) (string, error)
+	// GroupLeave leaves a group.
+	GroupLeave(ctx context.Context, name, groupJID string) error
+}
+
+// ParticipantResult is the backend-neutral outcome of a group participant update.
+type ParticipantResult struct {
+	JID    string
+	Status string
 }
 
 // MediaArg carries decoded media bytes plus metadata for SendMedia.
@@ -421,6 +444,101 @@ func (b *ManagerBackend) GroupMetadata(ctx context.Context, name, jid string) (G
 		Creation:     info.Creation,
 		Participants: parts,
 	}, nil
+}
+
+// SendPresence sets typing (composing|paused, per-chat) or global availability
+// (available|unavailable) through the live client. The presence string is passed
+// as an untyped constant so the library's named PresenceState/ChatState types
+// need not be imported by this module.
+func (b *ManagerBackend) SendPresence(ctx context.Context, name, jid, presence string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	switch presence {
+	case "composing":
+		return c.SendTyping(ctx, jid, "composing")
+	case "paused":
+		return c.SendTyping(ctx, jid, "paused")
+	case "available":
+		return c.SendPresence(ctx, "available")
+	case "unavailable":
+		return c.SendPresence(ctx, "unavailable")
+	default:
+		return fmt.Errorf("unsupported presence %q", presence)
+	}
+}
+
+// MarkRead sends read receipts for the given message ids on a chat. The
+// participant argument is left empty (1:1 chats); group read receipts would need
+// the sender's jid which this build does not thread through.
+func (b *ManagerBackend) MarkRead(ctx context.Context, name, jid string, ids []string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.SendReadReceipt(ctx, jid, ids, "")
+}
+
+// GroupCreate creates a new group through the live client and maps the returned
+// GroupInfo into the backend-neutral GroupArg.
+func (b *ManagerBackend) GroupCreate(ctx context.Context, name, subject string, participants []string) (GroupArg, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return GroupArg{}, err
+	}
+	info, err := c.GroupCreate(ctx, subject, participants)
+	if err != nil {
+		return GroupArg{}, err
+	}
+	parts := make([]GroupParticipantArg, 0, len(info.Participants))
+	for _, p := range info.Participants {
+		parts = append(parts, GroupParticipantArg{JID: p.JID, Admin: participantAdmin(p.IsAdmin, p.IsSuperAdmin)})
+	}
+	return GroupArg{
+		JID:          info.JID,
+		Subject:      info.Subject,
+		Owner:        info.Owner,
+		Desc:         info.Desc,
+		Creation:     info.Creation,
+		Participants: parts,
+	}, nil
+}
+
+// GroupUpdateParticipants adds/removes/promotes/demotes members through the live
+// client and maps the per-participant result.
+func (b *ManagerBackend) GroupUpdateParticipants(ctx context.Context, name, groupJID, action string, participants []string) ([]ParticipantResult, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.GroupParticipantsUpdate(ctx, groupJID, participants, action)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ParticipantResult, 0, len(res))
+	for _, r := range res {
+		out = append(out, ParticipantResult{JID: r.JID, Status: r.Status})
+	}
+	return out, nil
+}
+
+// GroupInviteCode returns the group's current invite code through the live client.
+func (b *ManagerBackend) GroupInviteCode(ctx context.Context, name, groupJID string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.GroupInviteCode(ctx, groupJID)
+}
+
+// GroupLeave leaves a group through the live client.
+func (b *ManagerBackend) GroupLeave(ctx context.Context, name, groupJID string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.GroupLeave(ctx, groupJID)
 }
 
 // participantAdmin maps the library's two admin booleans to the Evolution admin

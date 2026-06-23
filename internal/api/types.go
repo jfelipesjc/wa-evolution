@@ -57,6 +57,75 @@ type setWebhookResp struct {
 	} `json:"webhook"`
 }
 
+// findWebhookResp is the body of GET /webhook/find/{instance}. It reports the
+// persisted webhook URL for the instance (empty if none configured). enabled
+// mirrors Evolution's shape (true when a URL is set).
+type findWebhookResp struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`
+}
+
+// --- presence / typing ---
+
+// sendPresenceReq is the body of POST /chat/sendPresence/{instance}. presence is
+// one of composing|paused|available|unavailable (Evolution/Baileys vocabulary).
+// number is required for composing/paused (per-chat typing); for the global
+// available/unavailable it is optional.
+type sendPresenceReq struct {
+	Number   string `json:"number,omitempty"`
+	Presence string `json:"presence"`
+}
+
+// --- read receipts ---
+
+// readKey is one {remoteJid,id} entry of markMessageAsRead.
+type readKey struct {
+	RemoteJID string `json:"remoteJid"`
+	ID        string `json:"id"`
+}
+
+// markReadReq is the body of POST /message/markMessageAsRead/{instance}. It
+// accepts Evolution's readMessages:[{remoteJid,id}] form and a convenience
+// {number, ids:[...]} form.
+type markReadReq struct {
+	ReadMessages []readKey `json:"readMessages,omitempty"`
+	Number       string    `json:"number,omitempty"`
+	IDs          []string  `json:"ids,omitempty"`
+}
+
+// --- group management ---
+
+// groupCreateReq is the body of POST /group/create/{instance}.
+type groupCreateReq struct {
+	Subject      string   `json:"subject"`
+	Participants []string `json:"participants"`
+}
+
+// updateParticipantReq is the body of POST /group/updateParticipant/{instance}.
+// action is one of add|remove|promote|demote.
+type updateParticipantReq struct {
+	GroupJID     string   `json:"groupJid"`
+	Action       string   `json:"action"`
+	Participants []string `json:"participants"`
+}
+
+// participantResult is one row of an updateParticipant response.
+type participantResult struct {
+	JID    string `json:"jid"`
+	Status string `json:"status"`
+}
+
+// inviteCodeResp is the body of GET /group/inviteCode/{instance}.
+type inviteCodeResp struct {
+	InviteCode string `json:"inviteCode"`
+	InviteURL  string `json:"inviteUrl"`
+}
+
+// leaveGroupReq is the body of POST /group/leave/{instance}.
+type leaveGroupReq struct {
+	GroupJID string `json:"groupJid"`
+}
+
 // --- messages ---
 
 type sendTextReq struct {

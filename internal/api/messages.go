@@ -98,6 +98,165 @@ func (s *Server) handleSendReaction(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleMarkRead: POST /message/markMessageAsRead/{instance}. Accepts Evolution's
+// {readMessages:[{remoteJid,id}]} form and a {number, ids:[...]} convenience form.
+// It groups ids per chat and sends a read receipt for each chat.
+func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req markReadReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	// Build chat -> ids, merging both request shapes.
+	byChat := map[string][]string{}
+	for _, k := range req.ReadMessages {
+		if k.RemoteJID == "" || k.ID == "" {
+			continue
+		}
+		jid := normalizeJID(k.RemoteJID)
+		byChat[jid] = append(byChat[jid], k.ID)
+	}
+	if req.Number != "" && len(req.IDs) > 0 {
+		jid := normalizeJID(req.Number)
+		byChat[jid] = append(byChat[jid], req.IDs...)
+	}
+	if len(byChat) == 0 {
+		s.writeError(w, http.StatusBadRequest, "readMessages[{remoteJid,id}] or {number,ids} is required")
+		return
+	}
+	for jid, ids := range byChat {
+		if err := s.backend.MarkRead(r.Context(), name, jid, ids); err != nil {
+			s.writeSendError(w, err)
+			return
+		}
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleSendPresence: POST /chat/sendPresence/{instance} {number, presence}.
+func (s *Server) handleSendPresence(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req sendPresenceReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	switch req.Presence {
+	case "composing", "paused":
+		if req.Number == "" {
+			s.writeError(w, http.StatusBadRequest, "number is required for composing|paused")
+			return
+		}
+	case "available", "unavailable":
+	default:
+		s.writeError(w, http.StatusBadRequest, "presence must be composing|paused|available|unavailable")
+		return
+	}
+	jid := normalizeJID(req.Number)
+	if err := s.backend.SendPresence(r.Context(), name, jid, req.Presence); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleGroupCreate: POST /group/create/{instance} {subject, participants[]}.
+func (s *Server) handleGroupCreate(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req groupCreateReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Subject == "" {
+		s.writeError(w, http.StatusBadRequest, "subject is required")
+		return
+	}
+	parts := make([]string, 0, len(req.Participants))
+	for _, p := range req.Participants {
+		parts = append(parts, normalizeJID(p))
+	}
+	g, err := s.backend.GroupCreate(r.Context(), name, req.Subject, parts)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, groupToRecord(g))
+}
+
+// handleUpdateParticipant: POST /group/updateParticipant/{instance}
+// {groupJid, action, participants[]}.
+func (s *Server) handleUpdateParticipant(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req updateParticipantReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.GroupJID == "" {
+		s.writeError(w, http.StatusBadRequest, "groupJid is required")
+		return
+	}
+	switch req.Action {
+	case "add", "remove", "promote", "demote":
+	default:
+		s.writeError(w, http.StatusBadRequest, "action must be add|remove|promote|demote")
+		return
+	}
+	if len(req.Participants) == 0 {
+		s.writeError(w, http.StatusBadRequest, "participants is required")
+		return
+	}
+	parts := make([]string, 0, len(req.Participants))
+	for _, p := range req.Participants {
+		parts = append(parts, normalizeJID(p))
+	}
+	res, err := s.backend.GroupUpdateParticipants(r.Context(), name, req.GroupJID, req.Action, parts)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	out := make([]participantResult, 0, len(res))
+	for _, p := range res {
+		out = append(out, participantResult{JID: p.JID, Status: p.Status})
+	}
+	s.writeJSON(w, http.StatusOK, out)
+}
+
+// handleInviteCode: GET /group/inviteCode/{instance}?groupJid=.
+func (s *Server) handleInviteCode(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	jid := r.URL.Query().Get("groupJid")
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "groupJid query param is required")
+		return
+	}
+	code, err := s.backend.GroupInviteCode(r.Context(), name, jid)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, inviteCodeResp{
+		InviteCode: code,
+		InviteURL:  "https://chat.whatsapp.com/" + code,
+	})
+}
+
+// handleLeaveGroup: POST /group/leave/{instance} {groupJid}.
+func (s *Server) handleLeaveGroup(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req leaveGroupReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.GroupJID == "" {
+		s.writeError(w, http.StatusBadRequest, "groupJid is required")
+		return
+	}
+	if err := s.backend.GroupLeave(r.Context(), name, req.GroupJID); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
 // handleFindMessages: POST /chat/findMessages/{instance} {where:{key:{remoteJid}}, limit?}.
 func (s *Server) handleFindMessages(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("instance")

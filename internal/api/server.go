@@ -47,6 +47,10 @@ type Options struct {
 	HTTPClient httpDoer
 	// Logger overrides the default (log.Default()).
 	Logger *log.Logger
+	// WebhookDir, when set, is the directory where per-instance webhook URLs are
+	// persisted (as <instance>.webhook sidecar files) so configured webhooks
+	// survive a restart. Empty keeps webhooks in memory only.
+	WebhookDir string
 }
 
 // New constructs a Server. apikey and backend are required.
@@ -62,6 +66,7 @@ func New(opts Options) *Server {
 		dispatcher: newWebhookDispatcher(opts.HTTPClient, logger),
 		logger:     logger,
 	}
+	s.dispatcher.setDir(opts.WebhookDir)
 	s.routes()
 	return s
 }
@@ -82,16 +87,25 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /instance/logout/{instance}", s.handleLogout)
 
 	s.mux.HandleFunc("POST /webhook/set/{instance}", s.handleSetWebhook)
+	s.mux.HandleFunc("GET /webhook/find/{instance}", s.handleFindWebhook)
 
 	s.mux.HandleFunc("POST /message/sendText/{instance}", s.handleSendText)
 	s.mux.HandleFunc("POST /message/sendMedia/{instance}", s.handleSendMedia)
 	s.mux.HandleFunc("POST /message/sendReaction/{instance}", s.handleSendReaction)
+	s.mux.HandleFunc("POST /message/markMessageAsRead/{instance}", s.handleMarkRead)
 
 	s.mux.HandleFunc("POST /chat/findMessages/{instance}", s.handleFindMessages)
 	s.mux.HandleFunc("POST /chat/whatsappNumbers/{instance}", s.handleWhatsAppNumbers)
+	// /chat/check is an Evolution alias of /chat/whatsappNumbers.
+	s.mux.HandleFunc("POST /chat/check/{instance}", s.handleWhatsAppNumbers)
+	s.mux.HandleFunc("POST /chat/sendPresence/{instance}", s.handleSendPresence)
 
 	s.mux.HandleFunc("GET /group/fetchAllGroups/{instance}", s.handleFetchAllGroups)
 	s.mux.HandleFunc("GET /group/groupMetadata/{instance}", s.handleGroupMetadata)
+	s.mux.HandleFunc("POST /group/create/{instance}", s.handleGroupCreate)
+	s.mux.HandleFunc("POST /group/updateParticipant/{instance}", s.handleUpdateParticipant)
+	s.mux.HandleFunc("GET /group/inviteCode/{instance}", s.handleInviteCode)
+	s.mux.HandleFunc("POST /group/leave/{instance}", s.handleLeaveGroup)
 }
 
 // authMiddleware enforces the global apikey on every request. The apikey is read

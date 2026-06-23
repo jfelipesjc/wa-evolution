@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +28,12 @@ type webhookDispatcher struct {
 	urls   map[string]string // instance -> webhook URL
 	client httpDoer
 	logger *log.Logger
+
+	// dir, when non-empty, is the directory where per-instance webhook URLs are
+	// persisted as <instance>.webhook sidecar files so configured webhooks survive
+	// a server restart (the in-memory map alone is volatile). Empty disables
+	// persistence (tests that don't exercise it).
+	dir string
 }
 
 func newWebhookDispatcher(client httpDoer, logger *log.Logger) *webhookDispatcher {
@@ -41,18 +50,71 @@ func newWebhookDispatcher(client httpDoer, logger *log.Logger) *webhookDispatche
 	}
 }
 
-// set registers (or replaces) the webhook URL for an instance.
+// setDir points the dispatcher at a persistence directory and loads any existing
+// <instance>.webhook sidecar files into the in-memory map. It is called once at
+// construction (see New) before any request is served.
+func (d *webhookDispatcher) setDir(dir string) {
+	if dir == "" {
+		return
+	}
+	d.dir = dir
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			d.logger.Printf("api/webhook: read persist dir %s: %v", dir, err)
+		}
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".webhook") {
+			continue
+		}
+		instance := strings.TrimSuffix(e.Name(), ".webhook")
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			d.logger.Printf("api/webhook: read %s: %v", e.Name(), err)
+			continue
+		}
+		if url := strings.TrimSpace(string(b)); url != "" {
+			d.urls[instance] = url
+		}
+	}
+}
+
+// persistPath returns the sidecar file path for an instance (empty if no dir).
+func (d *webhookDispatcher) persistPath(instance string) string {
+	if d.dir == "" {
+		return ""
+	}
+	return filepath.Join(d.dir, instance+".webhook")
+}
+
+// set registers (or replaces) the webhook URL for an instance and, when a
+// persistence dir is configured, writes it to the sidecar file so it survives a
+// restart.
 func (d *webhookDispatcher) set(instance, url string) {
 	d.mu.Lock()
 	d.urls[instance] = url
 	d.mu.Unlock()
+	if p := d.persistPath(instance); p != "" {
+		if err := os.WriteFile(p, []byte(url), 0o644); err != nil {
+			d.logger.Printf("api/webhook: persist %s: %v", instance, err)
+		}
+	}
 }
 
-// remove drops an instance's webhook URL.
+// remove drops an instance's webhook URL and its sidecar file.
 func (d *webhookDispatcher) remove(instance string) {
 	d.mu.Lock()
 	delete(d.urls, instance)
 	d.mu.Unlock()
+	if p := d.persistPath(instance); p != "" {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			d.logger.Printf("api/webhook: remove persist %s: %v", instance, err)
+		}
+	}
 }
 
 // url returns the configured webhook URL for an instance (empty if none).
