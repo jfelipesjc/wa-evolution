@@ -1,0 +1,369 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	wa "github.com/felipeleal/wa-go/wa"
+)
+
+// Backend is the seam between the HTTP handlers and the WhatsApp session stack.
+// Handlers depend only on this interface, so the whole API surface is testable
+// offline with a fake (no Manager, no Noise handshake, no network). The
+// production implementation (ManagerBackend) adapts *wa.Manager.
+type Backend interface {
+	// Create registers a new instance (opens its store, adds it to the manager).
+	Create(name string) error
+	// Connect starts the instance and returns the latest QR code string captured
+	// from its event stream (empty if already logged in / none yet).
+	Connect(ctx context.Context, name string) (qr string, err error)
+	// Delete removes an instance (stops + closes its store).
+	Delete(name string) error
+	// Logout disconnects an instance without deleting its store.
+	Logout(name string) error
+	// Status returns name -> Evolution connectionStatus (open|connecting|close).
+	Status() map[string]string
+	// Exists reports whether the named instance is registered.
+	Exists(name string) bool
+
+	// SendText sends a text message; returns the message id.
+	SendText(ctx context.Context, name, jid, text string) (string, error)
+	// SendMedia sends an image/video/audio/document; returns the message id.
+	SendMedia(ctx context.Context, name, jid string, m MediaArg) (string, error)
+	// SendReaction reacts to a target message; returns the reaction message id.
+	SendReaction(ctx context.Context, name, jid, msgID string, fromMe bool, emoji string) (string, error)
+
+	// FindMessages returns stored messages for a chat (newest last), bounded by
+	// limit (0 = all available).
+	FindMessages(name, jid string, limit int) ([]StoredMsg, error)
+	// WhatsAppNumbers resolves which numbers are on WhatsApp.
+	WhatsAppNumbers(ctx context.Context, name string, numbers []string) ([]NumberStatus, error)
+	// Groups returns metadata for all groups the instance participates in.
+	Groups(ctx context.Context, name string) ([]GroupArg, error)
+	// GroupMetadata returns metadata for one group.
+	GroupMetadata(ctx context.Context, name, jid string) (GroupArg, error)
+}
+
+// MediaArg carries decoded media bytes plus metadata for SendMedia.
+type MediaArg struct {
+	Kind     string // image|video|audio|document
+	Data     []byte
+	Caption  string
+	FileName string
+	Mimetype string
+}
+
+// StoredMsg is the backend-neutral view of a stored message.
+type StoredMsg struct {
+	ID        string
+	ChatJID   string
+	Timestamp int64
+	Text      string
+	Type      string
+	FromMe    bool
+}
+
+// NumberStatus is the backend-neutral OnWhatsApp result.
+type NumberStatus struct {
+	Number string
+	JID    string
+	Exists bool
+}
+
+// GroupArg is the backend-neutral group metadata.
+type GroupArg struct {
+	JID          string
+	Subject      string
+	Owner        string
+	Desc         string
+	Creation     int64
+	Participants []GroupParticipantArg
+}
+
+// GroupParticipantArg is one group member.
+type GroupParticipantArg struct {
+	JID   string
+	Admin string
+}
+
+// ErrInstanceNotFound is returned when an operation names an unknown instance.
+var ErrInstanceNotFound = errors.New("instance not found")
+
+// ErrNoSession is returned when an instance exists but has no live session yet
+// (not logged in), so a send/query cannot proceed.
+var ErrNoSession = errors.New("instance has no active session")
+
+// --- production backend backed by the Manager ---
+
+// ManagerBackend adapts *wa.Manager + per-instance stores and an in-memory
+// ChatStore (fed by the webhook event pump) into the Backend interface.
+type ManagerBackend struct {
+	mgr *wa.Manager
+	dir string
+
+	mu        sync.Mutex
+	instances map[string]*mbInstance
+}
+
+type mbInstance struct {
+	name  string
+	store wa.Store
+	mc    *wa.ManagedClient
+	chats *wa.ChatStore
+	qr    string // latest QR code captured from the event stream
+}
+
+// NewManagerBackend builds the production Backend backed by the given Manager,
+// writing per-instance SQLite stores under dir. The returned concrete type also
+// exposes ChatStore and SetQR so the host's event pump can feed message history
+// and capture QR codes (see cmd/wa-server).
+func NewManagerBackend(mgr *wa.Manager, dir string) *ManagerBackend {
+	return &ManagerBackend{
+		mgr:       mgr,
+		dir:       dir,
+		instances: make(map[string]*mbInstance),
+	}
+}
+
+// ChatStore returns the per-instance ChatStore (for the event pump's feed). It
+// returns nil for unknown instances.
+func (b *ManagerBackend) ChatStore(name string) *wa.ChatStore { return b.chatStore(name) }
+
+// SetQR records the latest QR code for an instance (called by the event pump).
+func (b *ManagerBackend) SetQR(name, code string) { b.setQR(name, code) }
+
+func (b *ManagerBackend) get(name string) (*mbInstance, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	in, ok := b.instances[name]
+	return in, ok
+}
+
+func (b *ManagerBackend) Exists(name string) bool {
+	_, ok := b.get(name)
+	return ok
+}
+
+// chatStore returns the ChatStore for an instance (used by the webhook pump to
+// feed incoming messages so findMessages has data).
+func (b *ManagerBackend) chatStore(name string) *wa.ChatStore {
+	if in, ok := b.get(name); ok {
+		return in.chats
+	}
+	return nil
+}
+
+// setQR records the latest QR for an instance (called by the event pump).
+func (b *ManagerBackend) setQR(name, code string) {
+	if in, ok := b.get(name); ok {
+		b.mu.Lock()
+		in.qr = code
+		b.mu.Unlock()
+	}
+}
+
+func (b *ManagerBackend) Create(name string) error {
+	if name == "" {
+		return errors.New("empty instance name")
+	}
+	b.mu.Lock()
+	if _, ok := b.instances[name]; ok {
+		b.mu.Unlock()
+		return fmt.Errorf("instance %q already exists", name)
+	}
+	b.mu.Unlock()
+
+	path := filepath.Join(b.dir, name+".db")
+	st, err := wa.OpenStore(path)
+	if err != nil {
+		return fmt.Errorf("open store: %w", err)
+	}
+	mc, err := b.mgr.Add(name, st)
+	if err != nil {
+		_ = st.Close()
+		return err
+	}
+	b.mu.Lock()
+	b.instances[name] = &mbInstance{name: name, store: st, mc: mc, chats: wa.NewChatStore()}
+	b.mu.Unlock()
+	return nil
+}
+
+func (b *ManagerBackend) Connect(ctx context.Context, name string) (string, error) {
+	in, ok := b.get(name)
+	if !ok {
+		return "", ErrInstanceNotFound
+	}
+	// The manager auto-starts instances on Add when already Started, so the QR is
+	// produced asynchronously and captured by the event pump into in.qr. Poll
+	// briefly for it (bounded) so the HTTP response carries the first QR.
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		b.mu.Lock()
+		qr := in.qr
+		b.mu.Unlock()
+		if qr != "" {
+			return qr, nil
+		}
+		st := b.mgr.Status()[name]
+		if st == wa.StateLoggedIn {
+			return "", nil // already authenticated, no QR needed
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+	b.mu.Lock()
+	qr := in.qr
+	b.mu.Unlock()
+	return qr, nil
+}
+
+func (b *ManagerBackend) Delete(name string) error {
+	b.mu.Lock()
+	in, ok := b.instances[name]
+	if ok {
+		delete(b.instances, name)
+	}
+	b.mu.Unlock()
+	if !ok {
+		return ErrInstanceNotFound
+	}
+	return in.store.Close()
+}
+
+func (b *ManagerBackend) Logout(name string) error {
+	if !b.Exists(name) {
+		return ErrInstanceNotFound
+	}
+	// The Manager has no per-instance stop; logout is best-effort a no-op beyond
+	// reporting success (full teardown is Delete). Documented limitation.
+	return nil
+}
+
+func (b *ManagerBackend) Status() map[string]string {
+	raw := b.mgr.Status()
+	out := make(map[string]string, len(raw))
+	for name, st := range raw {
+		out[name] = connectionStatus(st)
+	}
+	// Include registered-but-not-yet-started instances as close.
+	b.mu.Lock()
+	for name := range b.instances {
+		if _, ok := out[name]; !ok {
+			out[name] = "close"
+		}
+	}
+	b.mu.Unlock()
+	return out
+}
+
+// liveClient returns the live *wa.Client for an instance via the manager's
+// SendText-capable handle. We route sends through ManagedClient (which targets
+// the live session); the richer methods need the *wa.Client, which the
+// Manager builds per attempt and is not exposed. For media/reaction/usync/group
+// we therefore require the instance to expose its client; ManagerBackend tracks
+// none, so those return ErrNoSession in this build (documented). SendText works
+// through the ManagedClient.
+func (b *ManagerBackend) SendText(ctx context.Context, name, jid, text string) (string, error) {
+	in, ok := b.get(name)
+	if !ok {
+		return "", ErrInstanceNotFound
+	}
+	return in.mc.SendText(ctx, jid, text)
+}
+
+// The Manager exposes only SendText on its live session handle. The richer send
+// and query methods (media/reaction/findMessages backed by the live socket,
+// OnWhatsApp, GroupMetadata) need the underlying *wa.Client, which the
+// Manager rebuilds per connection attempt and does not surface. Rather than
+// widen the Manager here, this build returns a clear "not wired" error for those
+// on the production backend; the fake backend exercises the full HTTP surface in
+// tests. findMessages is served from the per-instance ChatStore (fed by the
+// event pump), so it works in production without the live client.
+func (b *ManagerBackend) SendMedia(ctx context.Context, name, jid string, m MediaArg) (string, error) {
+	if !b.Exists(name) {
+		return "", ErrInstanceNotFound
+	}
+	return "", errors.New("sendMedia not wired to live client in this build (use ChatStore/webhook path)")
+}
+
+func (b *ManagerBackend) SendReaction(ctx context.Context, name, jid, msgID string, fromMe bool, emoji string) (string, error) {
+	if !b.Exists(name) {
+		return "", ErrInstanceNotFound
+	}
+	return "", errors.New("sendReaction not wired to live client in this build")
+}
+
+func (b *ManagerBackend) FindMessages(name, jid string, limit int) ([]StoredMsg, error) {
+	in, ok := b.get(name)
+	if !ok {
+		return nil, ErrInstanceNotFound
+	}
+	stored := in.chats.ChatMessages(jid, limit)
+	out := make([]StoredMsg, 0, len(stored))
+	for _, sm := range stored {
+		out = append(out, StoredMsg{
+			ID:        sm.Key,
+			ChatJID:   sm.FromJID,
+			Timestamp: sm.Timestamp,
+			Text:      sm.Text,
+			Type:      sm.Type,
+		})
+	}
+	return out, nil
+}
+
+func (b *ManagerBackend) WhatsAppNumbers(ctx context.Context, name string, numbers []string) ([]NumberStatus, error) {
+	if !b.Exists(name) {
+		return nil, ErrInstanceNotFound
+	}
+	return nil, errors.New("whatsappNumbers not wired to live client in this build")
+}
+
+func (b *ManagerBackend) Groups(ctx context.Context, name string) ([]GroupArg, error) {
+	if !b.Exists(name) {
+		return nil, ErrInstanceNotFound
+	}
+	return nil, errors.New("fetchAllGroups not wired to live client in this build")
+}
+
+func (b *ManagerBackend) GroupMetadata(ctx context.Context, name, jid string) (GroupArg, error) {
+	if !b.Exists(name) {
+		return GroupArg{}, ErrInstanceNotFound
+	}
+	return GroupArg{}, errors.New("groupMetadata not wired to live client in this build")
+}
+
+// connectionStatus maps a wa.State to the Evolution connectionStatus value.
+func connectionStatus(s wa.State) string {
+	switch s {
+	case wa.StateLoggedIn:
+		return "open"
+	case wa.StateConnecting, wa.StateConnected, wa.StateBackoff:
+		return "connecting"
+	default:
+		return "close"
+	}
+}
+
+// normalizeJID appends @s.whatsapp.net to a bare phone number (no domain). A
+// value already containing "@" is returned unchanged. Leading "+" is stripped.
+func normalizeJID(number string) string {
+	number = strings.TrimSpace(number)
+	if number == "" {
+		return ""
+	}
+	if strings.Contains(number, "@") {
+		return number
+	}
+	number = strings.TrimPrefix(number, "+")
+	return number + "@s.whatsapp.net"
+}

@@ -1,0 +1,5 @@
+/instances/
+*.db
+*.db-*
+wa-server
+/bin/
