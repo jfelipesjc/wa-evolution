@@ -46,6 +46,39 @@ type fakeBackend struct {
 	created   []groupCreateCall
 	partOps   []partUpdateCall
 	inviteFor string
+
+	deletes   []sentDelete
+	edits     []sentEdit
+	buttons   []sentButtons
+	lists     []sentList
+	locations []sentLocation
+	contacts  []sentContact
+}
+
+type sentDelete struct {
+	name, jid, msgID string
+	fromMe           bool
+}
+type sentEdit struct {
+	name, jid, msgID, text string
+	fromMe                 bool
+}
+type sentButtons struct {
+	name, jid, text, footer string
+	ids, texts              []string
+}
+type sentList struct {
+	name, jid, text, buttonText string
+	sectionTitles               []string
+	rowTitles, rowDescs, rowIDs [][]string
+}
+type sentLocation struct {
+	name, jid     string
+	lat, lng      float64
+	locName, addr string
+}
+type sentContact struct {
+	name, jid, displayName, vcard string
 }
 
 type sentPresence struct{ name, jid, presence string }
@@ -135,6 +168,48 @@ func (f *fakeBackend) SendMedia(ctx context.Context, name, jid string, m MediaAr
 
 func (f *fakeBackend) SendReaction(ctx context.Context, name, jid, msgID string, fromMe bool, emoji string) (string, error) {
 	return "MSGID-REACT", nil
+}
+
+func (f *fakeBackend) DeleteMessage(ctx context.Context, name, jid, msgID string, fromMe bool) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deletes = append(f.deletes, sentDelete{name, jid, msgID, fromMe})
+	return "MSGID-DELETE", nil
+}
+
+func (f *fakeBackend) EditMessage(ctx context.Context, name, jid, msgID string, fromMe bool, text string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.edits = append(f.edits, sentEdit{name, jid, msgID, text, fromMe})
+	return "MSGID-EDIT", nil
+}
+
+func (f *fakeBackend) SendButtons(ctx context.Context, name, jid, text, footer string, buttonIDs, buttonTexts []string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.buttons = append(f.buttons, sentButtons{name, jid, text, footer, buttonIDs, buttonTexts})
+	return "MSGID-BUTTONS", nil
+}
+
+func (f *fakeBackend) SendList(ctx context.Context, name, jid, text, buttonText string, sectionTitles []string, rowTitles, rowDescs, rowIDs [][]string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lists = append(f.lists, sentList{name, jid, text, buttonText, sectionTitles, rowTitles, rowDescs, rowIDs})
+	return "MSGID-LIST", nil
+}
+
+func (f *fakeBackend) SendLocation(ctx context.Context, name, jid string, lat, lng float64, locName, address string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.locations = append(f.locations, sentLocation{name, jid, lat, lng, locName, address})
+	return "MSGID-LOCATION", nil
+}
+
+func (f *fakeBackend) SendContact(ctx context.Context, name, jid, displayName, vcard string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.contacts = append(f.contacts, sentContact{name, jid, displayName, vcard})
+	return "MSGID-CONTACT", nil
 }
 
 func (f *fakeBackend) FindMessages(name, jid string, limit int) ([]StoredMsg, error) {
@@ -1063,5 +1138,260 @@ func TestWebhookPersistence(t *testing.T) {
 	srv3 := New(Options{APIKey: testKey, Backend: newFakeBackend(), Logger: log.New(io.Discard, "", 0), WebhookDir: dir})
 	if got := srv3.Dispatcher().url("bot1"); got != "" {
 		t.Fatalf("url after remove = %q, want empty", got)
+	}
+}
+
+// --- deleteMessage / editMessage / interactive / location / contact ---
+
+func TestDeleteMessage_KeyForm(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/deleteMessage/bot1", testKey, deleteMessageReq{
+		Key: &messageKey{RemoteJID: "5512999", ID: "DEL1", FromMe: true},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-DELETE" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+	if len(fb.deletes) != 1 || fb.deletes[0].jid != "5512999@s.whatsapp.net" || fb.deletes[0].msgID != "DEL1" || !fb.deletes[0].fromMe {
+		t.Fatalf("delete recorded %+v", fb.deletes)
+	}
+}
+
+func TestDeleteMessage_NumberForm(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/deleteMessage/bot1", testKey, deleteMessageReq{
+		Number: "5512999", MessageID: "DEL2", FromMe: true,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.deletes) != 1 || fb.deletes[0].msgID != "DEL2" {
+		t.Fatalf("delete recorded %+v", fb.deletes)
+	}
+}
+
+func TestDeleteMessage_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/deleteMessage/bot1", testKey, deleteMessageReq{Number: "5512"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestDeleteMessage_NoAuth(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/deleteMessage/bot1", "", deleteMessageReq{Number: "5512999", MessageID: "X"})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestEditMessage(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/editMessage/bot1", testKey, editMessageReq{
+		Number: "5512999", MessageID: "ED1", FromMe: true, Text: "fixed text",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-EDIT" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+	if len(fb.edits) != 1 || fb.edits[0].msgID != "ED1" || fb.edits[0].text != "fixed text" || !fb.edits[0].fromMe {
+		t.Fatalf("edit recorded %+v", fb.edits)
+	}
+}
+
+func TestEditMessage_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/editMessage/bot1", testKey, editMessageReq{Number: "5512", MessageID: "X"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestEditMessage_NoAuth(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/editMessage/bot1", "", editMessageReq{Number: "5512999", MessageID: "X", Text: "y"})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestSendButtons(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendButtons/bot1", testKey, sendButtonsReq{
+		Number: "5512999", Text: "Pick one", Footer: "footer",
+		Buttons: []buttonItem{{ID: "b1", Text: "Yes"}, {ID: "b2", Text: "No"}},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-BUTTONS" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+	if len(fb.buttons) != 1 {
+		t.Fatalf("buttons not recorded")
+	}
+	b := fb.buttons[0]
+	if b.text != "Pick one" || b.footer != "footer" || len(b.ids) != 2 || b.ids[0] != "b1" || b.texts[1] != "No" {
+		t.Fatalf("buttons recorded wrong: %+v", b)
+	}
+}
+
+func TestSendButtons_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendButtons/bot1", testKey, sendButtonsReq{Number: "5512", Text: "hi"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no buttons)", rec.Code)
+	}
+}
+
+func TestSendList(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendList/bot1", testKey, sendListReq{
+		Number: "5512999", Text: "Menu", ButtonText: "Open",
+		Sections: []listSectionItem{
+			{Title: "Drinks", Rows: []listRowItem{
+				{Title: "Coke", Description: "cold", RowID: "d1"},
+				{Title: "Water", RowID: "d2"},
+			}},
+		},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-LIST" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+	if len(fb.lists) != 1 {
+		t.Fatalf("list not recorded")
+	}
+	l := fb.lists[0]
+	if len(l.sectionTitles) != 1 || l.sectionTitles[0] != "Drinks" {
+		t.Fatalf("sections wrong: %+v", l.sectionTitles)
+	}
+	if len(l.rowTitles[0]) != 2 || l.rowTitles[0][0] != "Coke" || l.rowIDs[0][1] != "d2" || l.rowDescs[0][0] != "cold" {
+		t.Fatalf("rows wrong: titles=%+v descs=%+v ids=%+v", l.rowTitles, l.rowDescs, l.rowIDs)
+	}
+}
+
+func TestSendList_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendList/bot1", testKey, sendListReq{Number: "5512", Text: "hi"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no sections)", rec.Code)
+	}
+}
+
+func TestSendLocation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendLocation/bot1", testKey, sendLocationReq{
+		Number: "5512999", Latitude: -23.5, Longitude: -46.6, Name: "Sé", Address: "Centro",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-LOCATION" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+	if len(fb.locations) != 1 {
+		t.Fatalf("location not recorded")
+	}
+	loc := fb.locations[0]
+	if loc.lat != -23.5 || loc.lng != -46.6 || loc.locName != "Sé" || loc.addr != "Centro" || loc.jid != "5512999@s.whatsapp.net" {
+		t.Fatalf("location recorded wrong: %+v", loc)
+	}
+}
+
+func TestSendLocation_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendLocation/bot1", testKey, sendLocationReq{Latitude: 1})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestSendContact(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	const vcard = "BEGIN:VCARD\nVERSION:3.0\nFN:Jane\nEND:VCARD"
+	rec := do(t, h, "POST", "/message/sendContact/bot1", testKey, sendContactReq{
+		Number: "5512999", Contact: contactItem{FullName: "Jane Doe", Vcard: vcard},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-CONTACT" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+	if len(fb.contacts) != 1 || fb.contacts[0].displayName != "Jane Doe" || fb.contacts[0].vcard != vcard {
+		t.Fatalf("contact recorded wrong: %+v", fb.contacts)
+	}
+}
+
+func TestSendContact_DisplayNameAlias(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendContact/bot1", testKey, sendContactReq{
+		Number: "5512999", Contact: contactItem{DisplayName: "Bob", Vcard: "X"},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.contacts) != 1 || fb.contacts[0].displayName != "Bob" {
+		t.Fatalf("displayName alias not used: %+v", fb.contacts)
+	}
+}
+
+func TestSendContact_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendContact/bot1", testKey, sendContactReq{Number: "5512"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no vcard)", rec.Code)
 	}
 }

@@ -37,6 +37,19 @@ type Backend interface {
 	SendMedia(ctx context.Context, name, jid string, m MediaArg) (string, error)
 	// SendReaction reacts to a target message; returns the reaction message id.
 	SendReaction(ctx context.Context, name, jid, msgID string, fromMe bool, emoji string) (string, error)
+	// DeleteMessage revokes (deletes for everyone) a target message; returns the
+	// revoke message id.
+	DeleteMessage(ctx context.Context, name, jid, msgID string, fromMe bool) (string, error)
+	// EditMessage edits a previously sent text message; returns the edit message id.
+	EditMessage(ctx context.Context, name, jid, msgID string, fromMe bool, text string) (string, error)
+	// SendButtons sends a quick-reply buttons message; returns the message id.
+	SendButtons(ctx context.Context, name, jid, text, footer string, buttonIDs, buttonTexts []string) (string, error)
+	// SendList sends a single-select list message; returns the message id.
+	SendList(ctx context.Context, name, jid, text, buttonText string, sectionTitles []string, rowTitles, rowDescs, rowIDs [][]string) (string, error)
+	// SendLocation sends a location pin; returns the message id.
+	SendLocation(ctx context.Context, name, jid string, lat, lng float64, locName, address string) (string, error)
+	// SendContact sends a vCard contact; returns the message id.
+	SendContact(ctx context.Context, name, jid, displayName, vcard string) (string, error)
 
 	// FindMessages returns stored messages for a chat (newest last), bounded by
 	// limit (0 = all available).
@@ -348,6 +361,60 @@ func (b *ManagerBackend) SendReaction(ctx context.Context, name, jid, msgID stri
 		return "", err
 	}
 	return c.React(ctx, jid, msgID, fromMe, emoji)
+}
+
+// DeleteMessage revokes a target message through the live client.
+func (b *ManagerBackend) DeleteMessage(ctx context.Context, name, jid, msgID string, fromMe bool) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.DeleteMessageByID(ctx, jid, msgID, fromMe)
+}
+
+// EditMessage edits a previously sent text message through the live client.
+func (b *ManagerBackend) EditMessage(ctx context.Context, name, jid, msgID string, fromMe bool, text string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.EditTextByID(ctx, jid, msgID, fromMe, text)
+}
+
+// SendButtons sends a quick-reply buttons message through the live client.
+func (b *ManagerBackend) SendButtons(ctx context.Context, name, jid, text, footer string, buttonIDs, buttonTexts []string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.SendButtonsSimple(ctx, jid, text, footer, buttonIDs, buttonTexts)
+}
+
+// SendList sends a single-select list message through the live client.
+func (b *ManagerBackend) SendList(ctx context.Context, name, jid, text, buttonText string, sectionTitles []string, rowTitles, rowDescs, rowIDs [][]string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.SendListSimple(ctx, jid, text, buttonText, sectionTitles, rowTitles, rowDescs, rowIDs)
+}
+
+// SendLocation sends a location pin through the live client.
+func (b *ManagerBackend) SendLocation(ctx context.Context, name, jid string, lat, lng float64, locName, address string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.SendLocation(ctx, jid, lat, lng, locName, address)
+}
+
+// SendContact sends a vCard contact through the live client.
+func (b *ManagerBackend) SendContact(ctx context.Context, name, jid, displayName, vcard string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.SendContact(ctx, jid, displayName, vcard)
 }
 
 func (b *ManagerBackend) FindMessages(name, jid string, limit int) ([]StoredMsg, error) {

@@ -98,6 +98,197 @@ func (s *Server) handleSendReaction(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleDeleteMessage: POST /message/deleteMessage/{instance}. Accepts
+// {key:{remoteJid,id,fromMe}} and a {number, messageId, fromMe} convenience form.
+func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req deleteMessageReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	var rawJID, msgID string
+	var fromMe bool
+	if req.Key != nil && req.Key.ID != "" {
+		rawJID = req.Key.RemoteJID
+		msgID = req.Key.ID
+		fromMe = req.Key.FromMe
+	} else {
+		rawJID = req.Number
+		msgID = req.MessageID
+		fromMe = req.FromMe
+	}
+	if rawJID == "" || msgID == "" {
+		s.writeError(w, http.StatusBadRequest, "key{remoteJid,id} or {number,messageId} is required")
+		return
+	}
+	jid := normalizeJID(rawJID)
+	id, err := s.backend.DeleteMessage(r.Context(), name, jid, msgID, fromMe)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, sendResp{
+		Key:    messageKey{RemoteJID: jid, FromMe: true, ID: id},
+		Status: sendStatusPending,
+	})
+}
+
+// handleEditMessage: POST /message/editMessage/{instance} {number, messageId,
+// fromMe, text}.
+func (s *Server) handleEditMessage(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req editMessageReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number == "" || req.MessageID == "" || req.Text == "" {
+		s.writeError(w, http.StatusBadRequest, "number, messageId and text are required")
+		return
+	}
+	jid := normalizeJID(req.Number)
+	id, err := s.backend.EditMessage(r.Context(), name, jid, req.MessageID, req.FromMe, req.Text)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, sendResp{
+		Key:    messageKey{RemoteJID: jid, FromMe: true, ID: id},
+		Status: sendStatusPending,
+	})
+}
+
+// handleSendButtons: POST /message/sendButtons/{instance}
+// {number, text, footer, buttons:[{id,text}]}.
+func (s *Server) handleSendButtons(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req sendButtonsReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number == "" || req.Text == "" {
+		s.writeError(w, http.StatusBadRequest, "number and text are required")
+		return
+	}
+	if len(req.Buttons) == 0 {
+		s.writeError(w, http.StatusBadRequest, "buttons is required")
+		return
+	}
+	ids := make([]string, 0, len(req.Buttons))
+	texts := make([]string, 0, len(req.Buttons))
+	for _, b := range req.Buttons {
+		ids = append(ids, b.ID)
+		texts = append(texts, b.Text)
+	}
+	jid := normalizeJID(req.Number)
+	id, err := s.backend.SendButtons(r.Context(), name, jid, req.Text, req.Footer, ids, texts)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, sendResp{
+		Key:    messageKey{RemoteJID: jid, FromMe: true, ID: id},
+		Status: sendStatusPending,
+	})
+}
+
+// handleSendList: POST /message/sendList/{instance}
+// {number, text, buttonText, sections:[{title, rows:[{title,description,rowId}]}]}.
+func (s *Server) handleSendList(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req sendListReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number == "" || req.Text == "" {
+		s.writeError(w, http.StatusBadRequest, "number and text are required")
+		return
+	}
+	if len(req.Sections) == 0 {
+		s.writeError(w, http.StatusBadRequest, "sections is required")
+		return
+	}
+	sectionTitles := make([]string, 0, len(req.Sections))
+	rowTitles := make([][]string, 0, len(req.Sections))
+	rowDescs := make([][]string, 0, len(req.Sections))
+	rowIDs := make([][]string, 0, len(req.Sections))
+	for _, sec := range req.Sections {
+		sectionTitles = append(sectionTitles, sec.Title)
+		titles := make([]string, 0, len(sec.Rows))
+		descs := make([]string, 0, len(sec.Rows))
+		rids := make([]string, 0, len(sec.Rows))
+		for _, row := range sec.Rows {
+			titles = append(titles, row.Title)
+			descs = append(descs, row.Description)
+			rids = append(rids, row.RowID)
+		}
+		rowTitles = append(rowTitles, titles)
+		rowDescs = append(rowDescs, descs)
+		rowIDs = append(rowIDs, rids)
+	}
+	jid := normalizeJID(req.Number)
+	id, err := s.backend.SendList(r.Context(), name, jid, req.Text, req.ButtonText, sectionTitles, rowTitles, rowDescs, rowIDs)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, sendResp{
+		Key:    messageKey{RemoteJID: jid, FromMe: true, ID: id},
+		Status: sendStatusPending,
+	})
+}
+
+// handleSendLocation: POST /message/sendLocation/{instance}
+// {number, latitude, longitude, name, address}.
+func (s *Server) handleSendLocation(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req sendLocationReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number == "" {
+		s.writeError(w, http.StatusBadRequest, "number is required")
+		return
+	}
+	jid := normalizeJID(req.Number)
+	id, err := s.backend.SendLocation(r.Context(), name, jid, req.Latitude, req.Longitude, req.Name, req.Address)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, sendResp{
+		Key:    messageKey{RemoteJID: jid, FromMe: true, ID: id},
+		Status: sendStatusPending,
+	})
+}
+
+// handleSendContact: POST /message/sendContact/{instance}
+// {number, contact:{fullName|displayName, vcard}}.
+func (s *Server) handleSendContact(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req sendContactReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number == "" || req.Contact.Vcard == "" {
+		s.writeError(w, http.StatusBadRequest, "number and contact.vcard are required")
+		return
+	}
+	displayName := req.Contact.FullName
+	if displayName == "" {
+		displayName = req.Contact.DisplayName
+	}
+	jid := normalizeJID(req.Number)
+	id, err := s.backend.SendContact(r.Context(), name, jid, displayName, req.Contact.Vcard)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, sendResp{
+		Key:    messageKey{RemoteJID: jid, FromMe: true, ID: id},
+		Status: sendStatusPending,
+	})
+}
+
 // handleMarkRead: POST /message/markMessageAsRead/{instance}. Accepts Evolution's
 // {readMessages:[{remoteJid,id}]} form and a {number, ids:[...]} convenience form.
 // It groups ids per chat and sends a read receipt for each chat.

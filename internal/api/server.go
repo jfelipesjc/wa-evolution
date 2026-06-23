@@ -93,6 +93,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /message/sendMedia/{instance}", s.handleSendMedia)
 	s.mux.HandleFunc("POST /message/sendReaction/{instance}", s.handleSendReaction)
 	s.mux.HandleFunc("POST /message/markMessageAsRead/{instance}", s.handleMarkRead)
+	s.mux.HandleFunc("POST /message/deleteMessage/{instance}", s.handleDeleteMessage)
+	s.mux.HandleFunc("POST /message/editMessage/{instance}", s.handleEditMessage)
+	s.mux.HandleFunc("POST /message/sendButtons/{instance}", s.handleSendButtons)
+	s.mux.HandleFunc("POST /message/sendList/{instance}", s.handleSendList)
+	s.mux.HandleFunc("POST /message/sendLocation/{instance}", s.handleSendLocation)
+	s.mux.HandleFunc("POST /message/sendContact/{instance}", s.handleSendContact)
 
 	s.mux.HandleFunc("POST /chat/findMessages/{instance}", s.handleFindMessages)
 	s.mux.HandleFunc("POST /chat/whatsappNumbers/{instance}", s.handleWhatsAppNumbers)

@@ -154,6 +154,82 @@ type sendReactionReq struct {
 	Reaction string     `json:"reaction"`
 }
 
+// deleteMessageReq is the body of POST /message/deleteMessage/{instance}. It
+// accepts Evolution's {key:{remoteJid,id,fromMe}} form and a convenience
+// {number, messageId, fromMe} form.
+type deleteMessageReq struct {
+	Key       *messageKey `json:"key,omitempty"`
+	Number    string      `json:"number,omitempty"`
+	MessageID string      `json:"messageId,omitempty"`
+	FromMe    bool        `json:"fromMe,omitempty"`
+}
+
+// editMessageReq is the body of POST /message/editMessage/{instance}.
+type editMessageReq struct {
+	Number    string `json:"number"`
+	MessageID string `json:"messageId"`
+	FromMe    bool   `json:"fromMe,omitempty"`
+	Text      string `json:"text"`
+}
+
+// buttonItem is one reply button of sendButtons.
+type buttonItem struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+}
+
+// sendButtonsReq is the body of POST /message/sendButtons/{instance}.
+type sendButtonsReq struct {
+	Number  string       `json:"number"`
+	Text    string       `json:"text"`
+	Footer  string       `json:"footer,omitempty"`
+	Buttons []buttonItem `json:"buttons"`
+}
+
+// listRowItem is one selectable row inside a list section.
+type listRowItem struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	RowID       string `json:"rowId"`
+}
+
+// listSectionItem groups rows under a section title.
+type listSectionItem struct {
+	Title string        `json:"title"`
+	Rows  []listRowItem `json:"rows"`
+}
+
+// sendListReq is the body of POST /message/sendList/{instance}.
+type sendListReq struct {
+	Number     string            `json:"number"`
+	Text       string            `json:"text"`
+	ButtonText string            `json:"buttonText"`
+	Sections   []listSectionItem `json:"sections"`
+}
+
+// sendLocationReq is the body of POST /message/sendLocation/{instance}.
+type sendLocationReq struct {
+	Number    string  `json:"number"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Name      string  `json:"name,omitempty"`
+	Address   string  `json:"address,omitempty"`
+}
+
+// contactItem carries the contact's name and vCard. fullName and displayName are
+// accepted as aliases for the shown name.
+type contactItem struct {
+	FullName    string `json:"fullName,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
+	Vcard       string `json:"vcard"`
+}
+
+// sendContactReq is the body of POST /message/sendContact/{instance}.
+type sendContactReq struct {
+	Number  string      `json:"number"`
+	Contact contactItem `json:"contact"`
+}
+
 // sendResp is the Evolution send acknowledgement.
 type sendResp struct {
 	Key              messageKey `json:"key"`
