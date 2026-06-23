@@ -372,10 +372,30 @@ func (b *ManagerBackend) WhatsAppNumbers(ctx context.Context, name string, numbe
 // empty when offline) and then return an empty list. Documented limitation —
 // callers wanting a specific group should use GroupMetadata with its JID.
 func (b *ManagerBackend) Groups(ctx context.Context, name string) ([]GroupArg, error) {
-	if _, err := b.liveClient(name); err != nil {
+	c, err := b.liveClient(name)
+	if err != nil {
 		return nil, err
 	}
-	return []GroupArg{}, nil
+	infos, err := c.FetchAllGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]GroupArg, 0, len(infos))
+	for _, info := range infos {
+		parts := make([]GroupParticipantArg, 0, len(info.Participants))
+		for _, p := range info.Participants {
+			parts = append(parts, GroupParticipantArg{JID: p.JID, Admin: participantAdmin(p.IsAdmin, p.IsSuperAdmin)})
+		}
+		out = append(out, GroupArg{
+			JID:          info.JID,
+			Subject:      info.Subject,
+			Owner:        info.Owner,
+			Desc:         info.Desc,
+			Creation:     info.Creation,
+			Participants: parts,
+		})
+	}
+	return out, nil
 }
 
 // GroupMetadata returns metadata for one group via a live w:g2 query, mapping the
