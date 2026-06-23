@@ -265,13 +265,9 @@ func (b *ManagerBackend) Status() map[string]string {
 	return out
 }
 
-// liveClient returns the live *wa.Client for an instance via the manager's
-// SendText-capable handle. We route sends through ManagedClient (which targets
-// the live session); the richer methods need the *wa.Client, which the
-// Manager builds per attempt and is not exposed. For media/reaction/usync/group
-// we therefore require the instance to expose its client; ManagerBackend tracks
-// none, so those return ErrNoSession in this build (documented). SendText works
-// through the ManagedClient.
+// SendText sends a text message through the ManagedClient's live-session handle
+// (the lightweight path that does not need the full *wa.Client). The richer
+// media/reaction/usync/group methods fetch the live *wa.Client via liveClient.
 func (b *ManagerBackend) SendText(ctx context.Context, name, jid, text string) (string, error) {
 	in, ok := b.get(name)
 	if !ok {
@@ -280,26 +276,55 @@ func (b *ManagerBackend) SendText(ctx context.Context, name, jid, text string) (
 	return in.mc.SendText(ctx, jid, text)
 }
 
-// The Manager exposes only SendText on its live session handle. The richer send
-// and query methods (media/reaction/findMessages backed by the live socket,
-// OnWhatsApp, GroupMetadata) need the underlying *wa.Client, which the
-// Manager rebuilds per connection attempt and does not surface. Rather than
-// widen the Manager here, this build returns a clear "not wired" error for those
-// on the production backend; the fake backend exercises the full HTTP surface in
-// tests. findMessages is served from the per-instance ChatStore (fed by the
-// event pump), so it works in production without the live client.
-func (b *ManagerBackend) SendMedia(ctx context.Context, name, jid string, m MediaArg) (string, error) {
-	if !b.Exists(name) {
-		return "", ErrInstanceNotFound
+// liveClient returns the instance's current live *wa.Client (the full client API
+// beyond SendText), fetched fresh from the ManagedClient per call since the
+// Manager rebuilds the client on every reconnection. It returns ErrInstanceNotFound
+// for an unknown instance and ErrNoSession when the instance is registered but
+// has no live session yet (offline / not logged in).
+func (b *ManagerBackend) liveClient(name string) (*wa.Client, error) {
+	in, ok := b.get(name)
+	if !ok {
+		return nil, ErrInstanceNotFound
 	}
-	return "", errors.New("sendMedia not wired to live client in this build (use ChatStore/webhook path)")
+	c, ok := in.mc.Client()
+	if !ok {
+		return nil, ErrNoSession
+	}
+	return c, nil
 }
 
-func (b *ManagerBackend) SendReaction(ctx context.Context, name, jid, msgID string, fromMe bool, emoji string) (string, error) {
-	if !b.Exists(name) {
-		return "", ErrInstanceNotFound
+// SendMedia uploads and sends an image/video/audio/document through the live
+// client. Media transfer is enabled lazily on the fetched client (the
+// EnableDefaultMediaTransfer call is idempotent — it just installs the live
+// http.DefaultClient uploader), so the first send on a fresh connection wires the
+// upload path before use.
+func (b *ManagerBackend) SendMedia(ctx context.Context, name, jid string, m MediaArg) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
 	}
-	return "", errors.New("sendReaction not wired to live client in this build")
+	c.EnableDefaultMediaTransfer()
+	switch m.Kind {
+	case "image":
+		return c.SendImageBytes(ctx, jid, m.Data, m.Caption, m.Mimetype)
+	case "video":
+		return c.SendVideoBytes(ctx, jid, m.Data, m.Caption, m.Mimetype)
+	case "audio":
+		return c.SendAudioBytes(ctx, jid, m.Data, m.Mimetype)
+	case "document":
+		return c.SendDocumentBytes(ctx, jid, m.Data, m.FileName, m.Mimetype)
+	default:
+		return "", fmt.Errorf("unsupported media kind %q", m.Kind)
+	}
+}
+
+// SendReaction reacts to a target message through the live client.
+func (b *ManagerBackend) SendReaction(ctx context.Context, name, jid, msgID string, fromMe bool, emoji string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.React(ctx, jid, msgID, fromMe, emoji)
 }
 
 func (b *ManagerBackend) FindMessages(name, jid string, limit int) ([]StoredMsg, error) {
@@ -321,25 +346,74 @@ func (b *ManagerBackend) FindMessages(name, jid string, limit int) ([]StoredMsg,
 	return out, nil
 }
 
+// WhatsAppNumbers resolves which numbers are on WhatsApp via a live usync query.
+// It reads only the exported fields of each result (Query/JID/Exists) so this
+// module need not name the library's internal result type.
 func (b *ManagerBackend) WhatsAppNumbers(ctx context.Context, name string, numbers []string) ([]NumberStatus, error) {
-	if !b.Exists(name) {
-		return nil, ErrInstanceNotFound
+	c, err := b.liveClient(name)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("whatsappNumbers not wired to live client in this build")
+	results, err := c.OnWhatsApp(ctx, numbers)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]NumberStatus, 0, len(results))
+	for _, r := range results {
+		out = append(out, NumberStatus{Number: r.Query, JID: r.JID, Exists: r.Exists})
+	}
+	return out, nil
 }
 
+// Groups returns metadata for all groups the instance participates in. The
+// library exposes per-group metadata (GroupMetadata) but no "fetch all groups"
+// usync, so there is no live way to enumerate joined groups in this build: we
+// require an active session (so callers get a connect error rather than a silent
+// empty when offline) and then return an empty list. Documented limitation —
+// callers wanting a specific group should use GroupMetadata with its JID.
 func (b *ManagerBackend) Groups(ctx context.Context, name string) ([]GroupArg, error) {
-	if !b.Exists(name) {
-		return nil, ErrInstanceNotFound
+	if _, err := b.liveClient(name); err != nil {
+		return nil, err
 	}
-	return nil, errors.New("fetchAllGroups not wired to live client in this build")
+	return []GroupArg{}, nil
 }
 
+// GroupMetadata returns metadata for one group via a live w:g2 query, mapping the
+// library's GroupInfo (exported fields only) into the backend-neutral GroupArg.
 func (b *ManagerBackend) GroupMetadata(ctx context.Context, name, jid string) (GroupArg, error) {
-	if !b.Exists(name) {
-		return GroupArg{}, ErrInstanceNotFound
+	c, err := b.liveClient(name)
+	if err != nil {
+		return GroupArg{}, err
 	}
-	return GroupArg{}, errors.New("groupMetadata not wired to live client in this build")
+	info, err := c.GroupMetadata(ctx, jid)
+	if err != nil {
+		return GroupArg{}, err
+	}
+	parts := make([]GroupParticipantArg, 0, len(info.Participants))
+	for _, p := range info.Participants {
+		parts = append(parts, GroupParticipantArg{JID: p.JID, Admin: participantAdmin(p.IsAdmin, p.IsSuperAdmin)})
+	}
+	return GroupArg{
+		JID:          info.JID,
+		Subject:      info.Subject,
+		Owner:        info.Owner,
+		Desc:         info.Desc,
+		Creation:     info.Creation,
+		Participants: parts,
+	}, nil
+}
+
+// participantAdmin maps the library's two admin booleans to the Evolution admin
+// string ("superadmin"|"admin"|"").
+func participantAdmin(isAdmin, isSuperAdmin bool) string {
+	switch {
+	case isSuperAdmin:
+		return "superadmin"
+	case isAdmin:
+		return "admin"
+	default:
+		return ""
+	}
 }
 
 // connectionStatus maps a wa.State to the Evolution connectionStatus value.
