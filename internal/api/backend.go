@@ -391,7 +391,16 @@ func (b *ManagerBackend) Delete(name string) error {
 	// Stop + unregister the instance in the manager first (ends its connection and
 	// event pump) so it no longer shows in Status as a zombie; then close its store.
 	_ = b.mgr.Remove(name)
-	return in.store.Close()
+	closeErr := in.store.Close()
+	// Remove the on-disk store files so a deleted instance does NOT resurrect on the
+	// next Restore() (boot). Covers the SQLite primary + WAL/SHM sidecars.
+	base := filepath.Join(b.dir, name+".db")
+	for _, p := range []string{base, base + "-wal", base + "-shm", base + "-journal"} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			closeErr = err
+		}
+	}
+	return closeErr
 }
 
 func (b *ManagerBackend) Logout(name string) error {
