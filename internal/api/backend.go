@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -250,6 +251,37 @@ func NewManagerBackend(mgr *wa.Manager, dir string) *ManagerBackend {
 	}
 }
 
+// Restore re-registers every instance persisted under the data dir so paired
+// sessions survive a server restart: it scans for <name>.db files and re-adds
+// each (the store reloads the saved creds, so the manager reconnects without a
+// re-pair). Returns the names restored. Call once at startup before serving.
+func (b *ManagerBackend) Restore() ([]string, error) {
+	entries, err := os.ReadDir(b.dir)
+	if err != nil {
+		return nil, fmt.Errorf("read data dir: %w", err)
+	}
+	var restored []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		fn := e.Name()
+		// Only the primary SQLite file; skip -wal/-shm sidecars and .webhook files.
+		if !strings.HasSuffix(fn, ".db") {
+			continue
+		}
+		name := strings.TrimSuffix(fn, ".db")
+		if name == "" || b.Exists(name) {
+			continue
+		}
+		if err := b.Create(name); err != nil {
+			return restored, fmt.Errorf("restore %q: %w", name, err)
+		}
+		restored = append(restored, name)
+	}
+	return restored, nil
+}
+
 // ChatStore returns the per-instance ChatStore (for the event pump's feed). It
 // returns nil for unknown instances.
 func (b *ManagerBackend) ChatStore(name string) *wa.ChatStore { return b.chatStore(name) }
@@ -356,6 +388,9 @@ func (b *ManagerBackend) Delete(name string) error {
 	if !ok {
 		return ErrInstanceNotFound
 	}
+	// Stop + unregister the instance in the manager first (ends its connection and
+	// event pump) so it no longer shows in Status as a zombie; then close its store.
+	_ = b.mgr.Remove(name)
 	return in.store.Close()
 }
 

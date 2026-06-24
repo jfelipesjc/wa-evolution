@@ -52,6 +52,14 @@ func run(addr, apikey, dir string) error {
 
 	backend := api.NewManagerBackend(mgr, dir)
 
+	// Restore previously-paired instances from disk so sessions survive restarts
+	// (the store reloads saved creds; the manager reconnects without a re-pair).
+	if restored, rerr := backend.Restore(); rerr != nil {
+		fmt.Fprintf(os.Stderr, "wa-server: restore warning: %v\n", rerr)
+	} else if len(restored) > 0 {
+		fmt.Fprintf(os.Stderr, "wa-server: restored %d instance(s): %v\n", len(restored), restored)
+	}
+
 	srv := api.New(api.Options{
 		APIKey:     apikey,
 		Backend:    backend,
