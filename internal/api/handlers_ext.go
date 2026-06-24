@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"net/http"
 	"sync"
 )
@@ -620,7 +621,113 @@ func (s *Server) handleOfferCall(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusCreated, offerCallResp{CallID: id, Status: "OFFER"})
 }
 
+// handleGetBase64FromMedia: POST /chat/getBase64FromMediaMessage/{instance}.
+// Accepts {message:{key:{remoteJid,id}}}, {key:{...}} or {number,messageId}.
+func (s *Server) handleGetBase64FromMedia(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req getBase64Req
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	var rawJID, msgID string
+	switch {
+	case req.Message != nil && req.Message.Key.ID != "":
+		rawJID, msgID = req.Message.Key.RemoteJID, req.Message.Key.ID
+	case req.Key != nil && req.Key.ID != "":
+		rawJID, msgID = req.Key.RemoteJID, req.Key.ID
+	default:
+		rawJID, msgID = req.Number, req.MessageID
+	}
+	if rawJID == "" || msgID == "" {
+		s.writeError(w, http.StatusBadRequest, "message.key{remoteJid,id} or {number,messageId} is required")
+		return
+	}
+	jid := normalizeJID(rawJID)
+	data, mime, err := s.backend.GetBase64FromMedia(r.Context(), name, jid, msgID)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, getBase64Resp{Mimetype: mime, Base64: base64.StdEncoding.EncodeToString(data)})
+}
+
+// handleMarkChatUnread: POST /chat/markChatUnread/{instance} {chat|number}.
+func (s *Server) handleMarkChatUnread(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req markChatUnreadReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	raw := req.Chat
+	if raw == "" {
+		raw = req.Number
+	}
+	if raw == "" {
+		s.writeError(w, http.StatusBadRequest, "chat or number is required")
+		return
+	}
+	jid := normalizeJID(raw)
+	if err := s.backend.MarkChatUnread(r.Context(), name, jid); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleFindStatusMessage: POST /chat/findStatusMessage/{instance}. Returns the
+// stored status@broadcast (stories) messages, reusing the findMessages store.
+func (s *Server) handleFindStatusMessage(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	// limit is optional; 0 = all stored.
+	var req findMessagesReq
+	_ = s.tryDecodeJSON(r, &req)
+	msgs, err := s.backend.FindMessages(name, "status@broadcast", req.Limit)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	var resp findMessagesResp
+	resp.Messages.Records = make([]messageRecord, 0, len(msgs))
+	for _, m := range msgs {
+		rec := messageRecord{
+			Key:              messageKey{RemoteJID: m.ChatJID, FromMe: m.FromMe, ID: m.ID},
+			MessageType:      m.Type,
+			MessageTimestamp: m.Timestamp,
+		}
+		rec.Message.Conversation = m.Text
+		resp.Messages.Records = append(resp.Messages.Records, rec)
+	}
+	s.writeJSON(w, http.StatusOK, resp)
+}
+
 // --- business ---
+
+// handleGetCollections: POST /business/getCollections/{instance} {number, limit}.
+// WhatsApp catalog collections are not separately fetched by the library; this
+// returns the full catalog wrapped as a single "All products" collection so the
+// route is functional and shape-compatible.
+func (s *Server) handleGetCollections(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req getCatalogReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number == "" {
+		s.writeError(w, http.StatusBadRequest, "number is required")
+		return
+	}
+	jid := normalizeJID(req.Number)
+	products, err := s.backend.GetCatalog(r.Context(), name, jid, req.Limit)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	recs := make([]productRecord, 0, len(products))
+	for _, p := range products {
+		recs = append(recs, productRecord{ID: p.ID, Name: p.Name, Description: p.Description, Price: p.Price, Currency: p.Currency})
+	}
+	s.writeJSON(w, http.StatusOK, []collectionRecord{{ID: "all", Name: "All products", Products: recs}})
+}
 
 // handleGetCatalog: POST /business/getCatalog/{instance} {number, limit}.
 func (s *Server) handleGetCatalog(w http.ResponseWriter, r *http.Request) {

@@ -155,6 +155,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /chat/findChatByRemoteJid/{instance}", s.handleFindChatByRemoteJid)
 	s.mux.HandleFunc("POST /chat/findContacts/{instance}", s.handleFindContacts)
 	s.mux.HandleFunc("GET /chat/findContacts/{instance}", s.handleFindContacts)
+	s.mux.HandleFunc("POST /chat/getBase64FromMediaMessage/{instance}", s.handleGetBase64FromMedia)
+	s.mux.HandleFunc("POST /chat/markChatUnread/{instance}", s.handleMarkChatUnread)
+	s.mux.HandleFunc("POST /chat/findStatusMessage/{instance}", s.handleFindStatusMessage)
 
 	// group
 	s.mux.HandleFunc("GET /group/findGroupInfos/{instance}", s.handleGroupMetadata)
@@ -178,6 +181,7 @@ func (s *Server) routes() {
 
 	// business
 	s.mux.HandleFunc("POST /business/getCatalog/{instance}", s.handleGetCatalog)
+	s.mux.HandleFunc("POST /business/getCollections/{instance}", s.handleGetCollections)
 
 	// settings (instance config; stored + echoed)
 	s.mux.HandleFunc("POST /settings/set/{instance}", s.handleSetSettings)
@@ -246,6 +250,16 @@ func (s *Server) decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool 
 		return false
 	}
 	return true
+}
+
+// tryDecodeJSON decodes an optional request body without writing an error
+// response on failure (used by endpoints whose body is optional, e.g. paging
+// params). It returns false if nothing could be decoded.
+func (s *Server) tryDecodeJSON(r *http.Request, v any) bool {
+	if r.Body == nil {
+		return false
+	}
+	return json.NewDecoder(r.Body).Decode(v) == nil
 }
 
 // qrPNGBase64 renders a QR string to a base64-encoded PNG and a data URI. It

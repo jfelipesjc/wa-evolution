@@ -150,3 +150,17 @@ func (f *fakeBackend) OfferCall(ctx context.Context, name, jid string, video boo
 func (f *fakeBackend) GetCatalog(ctx context.Context, name, jid string, limit int) ([]ProductArg, error) {
 	return f.products, nil
 }
+
+func (f *fakeBackend) GetBase64FromMedia(ctx context.Context, name, jid, msgID string) ([]byte, string, error) {
+	if f.mediaBytes == nil {
+		return nil, "", ErrInstanceNotFound
+	}
+	return f.mediaBytes, f.mediaMime, nil
+}
+
+func (f *fakeBackend) MarkChatUnread(ctx context.Context, name, jid string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.unreads = append(f.unreads, jid)
+	return nil
+}

@@ -154,6 +154,11 @@ type Backend interface {
 	OfferCall(ctx context.Context, name, jid string, video bool) (string, error)
 	// GetCatalog returns a business catalog (products).
 	GetCatalog(ctx context.Context, name, jid string, limit int) ([]ProductArg, error)
+	// GetBase64FromMedia downloads a stored media message's plaintext bytes,
+	// returning them with the media mimetype. Backs getBase64FromMediaMessage.
+	GetBase64FromMedia(ctx context.Context, name, jid, msgID string) ([]byte, string, error)
+	// MarkChatUnread marks a whole chat as unread (app-state).
+	MarkChatUnread(ctx context.Context, name, jid string) error
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.

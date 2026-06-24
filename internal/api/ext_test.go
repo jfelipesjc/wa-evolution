@@ -386,6 +386,86 @@ func TestProxySetAndFind(t *testing.T) {
 	}
 }
 
+func TestGetBase64FromMedia(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.mediaBytes = []byte("decrypted-jpeg")
+	fb.mediaMime = "image/jpeg"
+	h := newTestServer(t, fb)
+	var body getBase64Req
+	body.Message = &struct {
+		Key messageKey `json:"key"`
+	}{Key: messageKey{RemoteJID: "5512999", ID: "WAMID1"}}
+	rec := do(t, h, "POST", "/chat/getBase64FromMediaMessage/bot1", testKey, body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var gr getBase64Resp
+	_ = json.Unmarshal(rec.Body.Bytes(), &gr)
+	if gr.Mimetype != "image/jpeg" {
+		t.Fatalf("mimetype = %q", gr.Mimetype)
+	}
+	got, _ := base64.StdEncoding.DecodeString(gr.Base64)
+	if string(got) != "decrypted-jpeg" {
+		t.Fatalf("base64 decodes to %q", got)
+	}
+}
+
+func TestGetBase64FromMedia_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/getBase64FromMediaMessage/bot1", testKey, getBase64Req{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestMarkChatUnread(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/markChatUnread/bot1", testKey, markChatUnreadReq{Chat: "5512999"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.unreads) != 1 || fb.unreads[0] != "5512999@s.whatsapp.net" {
+		t.Fatalf("unreads = %+v", fb.unreads)
+	}
+}
+
+func TestFindStatusMessage(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.messages["status@broadcast"] = []StoredMsg{{ID: "S1", ChatJID: "status@broadcast", Text: "story", Type: "image"}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/findStatusMessage/bot1", testKey, findMessagesReq{Limit: 5})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var fr findMessagesResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &fr)
+	if len(fr.Messages.Records) != 1 || fr.Messages.Records[0].Key.ID != "S1" {
+		t.Fatalf("records = %+v", fr.Messages.Records)
+	}
+}
+
+func TestGetCollections(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.products = []ProductArg{{ID: "p1", Name: "Plano", Price: 2990, Currency: "BRL"}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/business/getCollections/bot1", testKey, getCatalogReq{Number: "5512999"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []collectionRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || len(out[0].Products) != 1 || out[0].Products[0].Name != "Plano" {
+		t.Fatalf("collections = %+v", out)
+	}
+}
+
 func TestDeleteMessageForEveryone_ChatAlias(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")

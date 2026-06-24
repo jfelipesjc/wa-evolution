@@ -66,6 +66,9 @@ type fakeBackend struct {
 	labels        []LabelArg
 	labelOps      []sentLabelOp
 	products      []ProductArg
+	mediaBytes    []byte
+	mediaMime     string
+	unreads       []string
 }
 
 type sentPoll struct {

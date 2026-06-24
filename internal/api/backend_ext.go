@@ -395,6 +395,36 @@ func (b *ManagerBackend) GetCatalog(ctx context.Context, name, jid string, limit
 	return out, nil
 }
 
+func (b *ManagerBackend) GetBase64FromMedia(ctx context.Context, name, jid, msgID string) ([]byte, string, error) {
+	in, ok := b.get(name)
+	if !ok {
+		return nil, "", ErrInstanceNotFound
+	}
+	c, err := b.liveClient(name)
+	if err != nil {
+		return nil, "", err
+	}
+	// Locate the stored message (carrying the raw WebMessageInfo with media keys)
+	// in the chat's history. ChatMessages returns newest-last; scan for the id.
+	for _, sm := range in.chats.ChatMessages(jid, 0) {
+		if sm.Key == msgID {
+			if sm.Raw == nil {
+				return nil, "", fmt.Errorf("stored message %q has no raw payload", msgID)
+			}
+			return c.DownloadStoredMedia(ctx, sm.Raw)
+		}
+	}
+	return nil, "", fmt.Errorf("message %q not found in chat %q history", msgID, jid)
+}
+
+func (b *ManagerBackend) MarkChatUnread(ctx context.Context, name, jid string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.MarkRead(ctx, jid, false)
+}
+
 // --- helpers ---
 
 func chatToArg(ch wa.Chat) ChatInfoArg {

@@ -179,6 +179,31 @@ type productRecord struct {
 	Currency    string `json:"currency,omitempty"`
 }
 
+type getBase64Req struct {
+	Message *struct {
+		Key messageKey `json:"key"`
+	} `json:"message"`
+	Key       *messageKey `json:"key"`
+	Number    string      `json:"number"`
+	MessageID string      `json:"messageId"`
+}
+
+type getBase64Resp struct {
+	Mimetype string `json:"mimetype"`
+	Base64   string `json:"base64"`
+}
+
+type markChatUnreadReq struct {
+	Chat   string `json:"chat"`
+	Number string `json:"number"`
+}
+
+type collectionRecord struct {
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	Products []productRecord `json:"products"`
+}
+
 // --- instance presence ---
 
 type setPresenceReq struct {
