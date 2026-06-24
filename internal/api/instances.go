@@ -79,6 +79,25 @@ func (s *Server) handleFetchInstances(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, out)
 }
 
+// handleConnectionState: GET /instance/connectionState/{instance}. Reports a
+// single instance's connection state in Evolution's shape:
+// {"instance":{"instanceName":"...","state":"open|close|connecting"}}. Workers
+// poll this to detect dropped sessions and trigger a reconnect.
+func (s *Server) handleConnectionState(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	if !s.backend.Exists(name) {
+		s.writeError(w, http.StatusNotFound, "instance not found")
+		return
+	}
+	state := s.backend.Status()[name]
+	if state == "" {
+		state = "close"
+	}
+	s.writeJSON(w, http.StatusOK, connectionStateResp{
+		Instance: connectionStateInfo{InstanceName: name, State: state},
+	})
+}
+
 // handleDelete: DELETE /instance/delete/{instance}.
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("instance")

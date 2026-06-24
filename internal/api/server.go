@@ -85,6 +85,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /instance/fetchInstances", s.handleFetchInstances)
 	s.mux.HandleFunc("DELETE /instance/delete/{instance}", s.handleDelete)
 	s.mux.HandleFunc("GET /instance/logout/{instance}", s.handleLogout)
+	s.mux.HandleFunc("GET /instance/connectionState/{instance}", s.handleConnectionState)
 
 	s.mux.HandleFunc("POST /webhook/set/{instance}", s.handleSetWebhook)
 	s.mux.HandleFunc("GET /webhook/find/{instance}", s.handleFindWebhook)

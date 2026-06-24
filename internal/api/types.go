@@ -41,6 +41,17 @@ type statusResp struct {
 	Status string `json:"status"`
 }
 
+// connectionStateResp is the body of GET /instance/connectionState/{instance},
+// matching Evolution's {"instance":{"instanceName","state"}} envelope.
+type connectionStateResp struct {
+	Instance connectionStateInfo `json:"instance"`
+}
+
+type connectionStateInfo struct {
+	InstanceName string `json:"instanceName"`
+	State        string `json:"state"`
+}
+
 // --- webhook config ---
 
 type setWebhookReq struct {
