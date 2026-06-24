@@ -12,58 +12,69 @@
   }
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
-  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--panel)}
-  header h1{font-size:16px;margin:0;font-weight:600}
+  a{color:var(--blue);text-decoration:none}
+  header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:5}
+  header h1{font-size:16px;margin:0;font-weight:600;cursor:pointer}
   header .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:2px 8px;border-radius:20px}
   header .spacer{flex:1}
-  main{max-width:1100px;margin:0 auto;padding:20px}
+  main{max-width:1080px;margin:0 auto;padding:20px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  input,button,select{font:inherit;border-radius:6px;border:1px solid var(--border)}
-  input{background:var(--panel2);color:var(--text);padding:8px 10px}
-  input:focus{outline:none;border-color:var(--blue)}
-  button{background:var(--panel2);color:var(--text);padding:8px 12px;cursor:pointer;transition:.1s}
+  input,button,select,textarea{font:inherit;border-radius:6px;border:1px solid var(--border)}
+  input,select,textarea{background:var(--panel2);color:var(--text);padding:8px 10px;width:100%}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
+  button{background:var(--panel2);color:var(--text);padding:8px 12px;cursor:pointer;transition:.1s;width:auto}
   button:hover{border-color:var(--muted)}
   button.primary{background:var(--accent2);border-color:var(--accent);color:#fff}
   button.primary:hover{background:var(--accent)}
   button.danger{color:#ff7b72;border-color:#5c2b29}
   button.danger:hover{background:#3d1d1c}
   button.ghost{background:transparent}
+  button.sm{padding:5px 9px;font-size:12px}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
-  .inst{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+  .inst{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer}
+  .inst:hover{border-color:var(--blue)}
   .inst h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px;word-break:break-all}
   .dot{width:9px;height:9px;border-radius:50%;flex:none}
   .dot.open{background:var(--accent);box-shadow:0 0 6px var(--accent)}
   .dot.connecting{background:var(--warn)}
   .dot.close{background:var(--muted)}
   .status{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-  .inst .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
-  .inst .acts button{padding:5px 9px;font-size:12px}
-  .qr{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px;background:#fff;border-radius:8px}
-  .qr img{width:200px;height:200px;image-rendering:pixelated}
+  .qr{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px;background:#fff;border-radius:8px;width:fit-content}
+  .qr img{width:220px;height:220px;image-rendering:pixelated}
   .qr small{color:#222}
   .muted{color:var(--muted)}
   .empty{text-align:center;color:var(--muted);padding:40px}
-  .toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--blue);padding:12px 16px;border-radius:8px;max-width:340px;opacity:0;transform:translateY(8px);transition:.2s}
+  .toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--blue);padding:12px 16px;border-radius:8px;max-width:340px;opacity:0;transform:translateY(8px);transition:.2s;z-index:20}
   .toast.show{opacity:1;transform:none}
   .toast.err{border-left-color:var(--danger)}
   .toast.ok{border-left-color:var(--accent)}
-  dialog{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:0;max-width:90vw}
-  dialog::backdrop{background:rgba(0,0,0,.6)}
-  .dlg-body{padding:20px;display:flex;flex-direction:column;gap:14px;min-width:300px}
-  .dlg-body h2{margin:0;font-size:16px}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
-  .field input{width:100%}
+  .field{margin-bottom:12px}
   .hide{display:none!important}
+  /* breadcrumb + tabs */
+  .crumb{display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:16px}
+  .tab{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);font-size:13px}
+  .tab:hover{color:var(--text)}
+  .tab.active{color:var(--text);border-bottom-color:var(--blue)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);word-break:break-all}
+  th{color:var(--muted);font-weight:500}
+  .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;border:1px solid var(--border)}
+  .toggle{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .toggle input{width:auto}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+  .kv b{font-weight:500;color:var(--muted)}
 </style>
 </head>
 <body>
 <header>
-  <h1>🟢 wa-evolution</h1>
-  <span class="badge" id="serverBadge">Manager</span>
+  <h1 id="home">🟢 wa-evolution</h1>
+  <span class="badge">Manager</span>
   <div class="spacer"></div>
   <span class="muted" id="connInfo"></span>
-  <button class="ghost" id="logoutBtn" title="Trocar API key">🔑</button>
+  <button class="ghost sm" id="logoutBtn" title="Trocar API key">🔑</button>
 </header>
 <main>
   <!-- login -->
@@ -71,159 +82,242 @@
     <h2 style="margin-top:0">Conectar ao servidor</h2>
     <p class="muted">Informe a URL base e a API key global do servidor wa-evolution.</p>
     <div class="row">
-      <div class="field" style="flex:1;min-width:200px"><label>Base URL</label><input id="baseUrl" placeholder="https://whats.seudominio.com"></div>
+      <div class="field" style="flex:1;min-width:200px"><label>Base URL</label><input id="baseUrl" placeholder="https://wa.seudominio.com"></div>
       <div class="field" style="flex:1;min-width:200px"><label>API key</label><input id="apiKey" type="password" placeholder="apikey"></div>
     </div>
-    <div class="row"><button class="primary" id="loginBtn">Entrar</button></div>
+    <button class="primary" id="loginBtn">Entrar</button>
   </div>
 
-  <!-- dashboard -->
-  <div id="dash" class="hide">
+  <!-- instances list -->
+  <div id="listView" class="hide">
     <div class="card">
       <div class="row">
-        <div class="field" style="flex:1;min-width:220px"><label>Nova instância</label><input id="newName" placeholder="nome-da-instancia"></div>
-        <div class="field" style="flex:2;min-width:220px"><label>Webhook URL (opcional)</label><input id="newHook" placeholder="https://.../webhook"></div>
-        <button class="primary" id="createBtn" style="align-self:flex-end">+ Criar</button>
-        <button class="ghost" id="refreshBtn" style="align-self:flex-end">↻ Atualizar</button>
+        <div class="field" style="flex:1;min-width:200px;margin:0"><label>Nova instância</label><input id="newName" placeholder="nome-da-instancia"></div>
+        <div class="field" style="flex:2;min-width:200px;margin:0"><label>Webhook URL (opcional)</label><input id="newHook" placeholder="https://.../webhook"></div>
+        <button class="primary" id="createBtn">+ Criar</button>
+        <button class="ghost" id="refreshBtn">↻</button>
       </div>
     </div>
     <div id="list" class="grid"></div>
     <div id="empty" class="empty hide">Nenhuma instância. Crie a primeira acima.</div>
   </div>
-</main>
 
-<!-- QR dialog -->
-<dialog id="qrDlg">
-  <div class="dlg-body" style="align-items:center">
-    <h2 id="qrTitle">Parear instância</h2>
-    <div class="qr" id="qrBox"><span class="muted" style="color:#666">gerando QR…</span></div>
-    <p class="muted" style="text-align:center;margin:0">Abra o WhatsApp → Aparelhos conectados → Conectar aparelho</p>
-    <button id="qrClose">Fechar</button>
+  <!-- instance detail -->
+  <div id="detailView" class="hide">
+    <div class="crumb"><a id="backLink">← Instâncias</a> <span class="muted">/</span> <b id="dInstName"></b> <span id="dStatusPill"></span></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="tabBody"></div>
   </div>
-</dialog>
+</main>
 
 <div class="toast" id="toast"></div>
 
 <script>
 const $ = s => document.querySelector(s);
+const el = (t,p={})=>Object.assign(document.createElement(t),p);
 let BASE = localStorage.getItem('wae_base') || '';
 let KEY  = localStorage.getItem('wae_key')  || '';
-let pollTimer = null, qrTimer = null;
+let listTimer=null, qrTimer=null;
+let cur=null, curTab='overview';
 
-function toast(msg, kind){
-  const t=$('#toast'); t.textContent=msg; t.className='toast show '+(kind||'');
-  setTimeout(()=>t.className='toast',2600);
-}
+function toast(msg,kind){const t=$('#toast');t.textContent=msg;t.className='toast show '+(kind||'');setTimeout(()=>t.className='toast',2800);}
 async function api(path, opts={}){
-  const r = await fetch(BASE.replace(/\/$/,'')+path, {
-    ...opts,
-    headers:{'apikey':KEY,'Content-Type':'application/json',...(opts.headers||{})}
-  });
-  const txt = await r.text();
-  let data; try{data=txt?JSON.parse(txt):null}catch(e){data=txt}
+  const r = await fetch(BASE.replace(/\/$/,'')+path,{...opts,headers:{'apikey':KEY,'Content-Type':'application/json',...(opts.headers||{})}});
+  const txt=await r.text(); let data; try{data=txt?JSON.parse(txt):null}catch(e){data=txt}
   if(!r.ok) throw new Error((data&&data.message)||r.status+' '+r.statusText);
   return data;
 }
+const STL={open:'conectado',connecting:'conectando',close:'desconectado'};
+const sc=s=>s==='open'?'open':(s==='connecting'?'connecting':'close');
+function pill(s){return `<span class="pill"><span class="dot ${sc(s)}" style="display:inline-block;margin-right:5px"></span>${STL[s]||s}</span>`}
 
-function showLogin(){ $('#loginCard').classList.remove('hide'); $('#dash').classList.add('hide'); if(pollTimer)clearInterval(pollTimer); }
-function showDash(){ $('#loginCard').classList.add('hide'); $('#dash').classList.remove('hide'); $('#connInfo').textContent=BASE.replace(/^https?:\/\//,''); }
+/* ---------- views ---------- */
+function show(view){['loginCard','listView','detailView'].forEach(v=>$('#'+v).classList.toggle('hide',v!==view));}
+function showLogin(){show('loginCard');stopTimers();}
+function showList(){show('listView');cur=null;stopQR();$('#connInfo').textContent=BASE.replace(/^https?:\/\//,'');refreshList();if(listTimer)clearInterval(listTimer);listTimer=setInterval(refreshList,6000);}
+function stopQR(){if(qrTimer){clearInterval(qrTimer);qrTimer=null;}}
+function stopTimers(){if(listTimer)clearInterval(listTimer);stopQR();}
 
-const STATUS_LABEL={open:'conectado',connecting:'conectando',close:'desconectado'};
-function statusClass(s){ return s==='open'?'open':(s==='connecting'?'connecting':'close'); }
-
-async function refresh(){
+async function refreshList(){
   try{
-    const list = await api('/instance/fetchInstances');
-    const el = $('#list'); el.innerHTML='';
-    const arr = Array.isArray(list)?list:[];
-    $('#empty').classList.toggle('hide', arr.length>0);
+    const list=await api('/instance/fetchInstances');
+    const arr=Array.isArray(list)?list:[]; const box=$('#list'); box.innerHTML='';
+    $('#empty').classList.toggle('hide',arr.length>0);
+    arr.sort((a,b)=>(a.instanceName||'').localeCompare(b.instanceName||''));
     for(const it of arr){
-      const name = it.instanceName||it.name||it.instance||'?';
-      const st = it.connectionStatus||it.state||'close';
-      const card = document.createElement('div'); card.className='inst';
-      card.innerHTML = `
-        <h3><span class="dot ${statusClass(st)}"></span>${name}</h3>
-        <div class="status">${STATUS_LABEL[st]||st}</div>
-        <div class="acts">
-          ${st==='open'
-            ? `<button data-act="logout" data-n="${name}">Desconectar</button>`
-            : `<button class="primary" data-act="qr" data-n="${name}">Parear (QR)</button>`}
-          <button data-act="restart" data-n="${name}">Reiniciar</button>
-          <button data-act="hook" data-n="${name}">Webhook</button>
-          <button class="danger" data-act="del" data-n="${name}">Excluir</button>
-        </div>`;
-      el.appendChild(card);
+      const name=it.instanceName||it.name; const st=it.connectionStatus||it.state||'close';
+      const c=el('div',{className:'inst'});
+      c.innerHTML=`<h3><span class="dot ${sc(st)}"></span>${name}</h3><div class="status">${STL[st]||st}</div><div class="muted" style="font-size:12px">clique para gerenciar →</div>`;
+      c.onclick=()=>openInstance(name);
+      box.appendChild(c);
     }
-  }catch(e){
-    toast('Falha ao listar: '+e.message,'err');
-    if(String(e.message).includes('401')||/apikey/i.test(e.message)){ showLogin(); }
+  }catch(e){toast('Falha ao listar: '+e.message,'err'); if(/401|apikey/i.test(e.message))showLogin();}
+}
+
+/* ---------- instance detail ---------- */
+const TABS=[
+  ['overview','Visão geral'],['send','Enviar'],['webhook','Webhook'],
+  ['settings','Settings'],['proxy','Proxy'],['chats','Chats'],
+  ['contacts','Contatos'],['groups','Grupos'],
+];
+function openInstance(name){cur=name;curTab='overview';show('detailView');stopTimers();$('#dInstName').textContent=name;renderTabs();loadTab();}
+function renderTabs(){
+  const t=$('#tabs');t.innerHTML='';
+  for(const [id,label] of TABS){const d=el('div',{className:'tab'+(id===curTab?' active':''),textContent:label});d.onclick=()=>{curTab=id;renderTabs();loadTab();};t.appendChild(d);}
+}
+async function refreshPill(){
+  try{const r=await api('/instance/connectionState/'+encodeURIComponent(cur));$('#dStatusPill').innerHTML=pill(r.instance.state);}catch(e){}
+}
+function body(html){$('#tabBody').innerHTML=html;}
+async function loadTab(){
+  stopQR(); refreshPill();
+  const I=encodeURIComponent(cur);
+  if(curTab==='overview') return tabOverview(I);
+  if(curTab==='send') return tabSend(I);
+  if(curTab==='webhook') return tabWebhook(I);
+  if(curTab==='settings') return tabSettings(I);
+  if(curTab==='proxy') return tabProxy(I);
+  if(curTab==='chats') return tabList(I,'/chat/findChats/','Chats',['id','name','unreadCount']);
+  if(curTab==='contacts') return tabList(I,'/chat/findContacts/','Contatos',['id','name','pushName']);
+  if(curTab==='groups') return tabGroups(I);
+}
+
+async function tabOverview(I){
+  body('<div class="card"><div class="muted">carregando…</div></div>');
+  let st='close'; try{st=(await api('/instance/connectionState/'+I)).instance.state;}catch(e){}
+  if(st==='open'){
+    body(`<div class="card">
+      <div class="kv"><b>Status</b><span>${pill(st)}</span></div>
+      <div class="field" style="margin-top:12px"><label>Nome do perfil</label><input id="pName" placeholder="novo nome"><button class="sm" style="margin-top:6px" onclick="setProfileName()">Salvar nome</button></div>
+      <div class="field"><label>Status (recado)</label><input id="pStatus" placeholder="novo recado"><button class="sm" style="margin-top:6px" onclick="setProfileStatus()">Salvar recado</button></div>
+      <div class="row" style="margin-top:12px">
+        <button class="sm" onclick="instAction('restart','PUT')">Reiniciar</button>
+        <button class="sm" onclick="instAction('logout','GET')">Desconectar</button>
+        <button class="sm danger" onclick="delInstance()">Excluir instância</button>
+      </div></div>`);
+  }else{
+    body(`<div class="card"><div class="kv"><b>Status</b><span>${pill(st)}</span></div>
+      <p class="muted">Escaneie o QR no WhatsApp → Aparelhos conectados → Conectar aparelho.</p>
+      <div class="qr" id="qrBox"><span style="color:#666">gerando QR…</span></div>
+      <div class="row" style="margin-top:12px">
+        <button class="sm" onclick="instAction('restart','PUT')">Reiniciar</button>
+        <button class="sm danger" onclick="delInstance()">Excluir</button>
+      </div></div>`);
+    pollQR(I);
   }
 }
-
-// event delegation for instance actions
-$('#list').addEventListener('click', async e=>{
-  const b=e.target.closest('button'); if(!b)return;
-  const n=b.dataset.n, act=b.dataset.act;
-  try{
-    if(act==='qr'){ openQR(n); }
-    else if(act==='logout'){ await api('/instance/logout/'+encodeURIComponent(n)); toast('Desconectado','ok'); refresh(); }
-    else if(act==='restart'){ await api('/instance/restart/'+encodeURIComponent(n),{method:'PUT'}); toast('Reiniciando…','ok'); refresh(); }
-    else if(act==='del'){ if(confirm('Excluir a instância "'+n+'"? Isso apaga a sessão.')){ await api('/instance/delete/'+encodeURIComponent(n),{method:'DELETE'}); toast('Excluída','ok'); refresh(); } }
-    else if(act==='hook'){ const url=prompt('Webhook URL para "'+n+'":'); if(url!=null){ await api('/webhook/set/'+encodeURIComponent(n),{method:'POST',body:JSON.stringify({url})}); toast('Webhook salvo','ok'); } }
-  }catch(err){ toast(err.message,'err'); }
-});
-
-// QR pairing
-async function openQR(name){
-  $('#qrTitle').textContent='Parear: '+name;
-  $('#qrBox').innerHTML='<span class="muted" style="color:#666">gerando QR…</span>';
-  $('#qrDlg').showModal();
-  const tick = async ()=>{
-    try{
-      const r = await api('/instance/connect/'+encodeURIComponent(name));
-      if(r && (r.connectionStatus==='open')){ $('#qrBox').innerHTML='<small>✅ Conectado!</small>'; clearInterval(qrTimer); setTimeout(()=>{$('#qrDlg').close();refresh()},1200); return; }
-      const img = r && (r.base64|| (r.code&&r.code.startsWith('data:')?r.code:''));
-      if(img){ $('#qrBox').innerHTML=`<img src="${img}" alt="QR"><small>escaneie</small>`; }
-    }catch(e){ /* keep polling */ }
+async function pollQR(I){
+  const tick=async()=>{
+    try{const r=await api('/instance/connect/'+I);
+      if(r.connectionStatus==='open'){stopQR();toast('Conectado!','ok');loadTab();return;}
+      const img=r.base64||(r.code&&r.code.startsWith('data:')?r.code:'');
+      const b=$('#qrBox'); if(b&&img)b.innerHTML=`<img src="${img}"><small>escaneie</small>`;
+    }catch(e){}
   };
-  await tick();
-  if(qrTimer)clearInterval(qrTimer);
-  qrTimer=setInterval(tick, 3000);
+  await tick(); stopQR(); qrTimer=setInterval(tick,3000);
 }
-$('#qrClose').onclick=()=>{ $('#qrDlg').close(); };
-$('#qrDlg').addEventListener('close',()=>{ if(qrTimer)clearInterval(qrTimer); refresh(); });
+window.setProfileName=async()=>{try{await api('/chat/updateProfileName/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify({name:$('#pName').value})});toast('Nome salvo','ok');}catch(e){toast(e.message,'err');}}
+window.setProfileStatus=async()=>{try{await api('/chat/updateProfileStatus/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify({status:$('#pStatus').value})});toast('Recado salvo','ok');}catch(e){toast(e.message,'err');}}
+window.instAction=async(act,m)=>{try{await api('/instance/'+act+'/'+encodeURIComponent(cur),{method:m});toast('OK','ok');loadTab();}catch(e){toast(e.message,'err');}}
+window.delInstance=async()=>{if(!confirm('Excluir a instância "'+cur+'"? Apaga a sessão.'))return;try{await api('/instance/delete/'+encodeURIComponent(cur),{method:'DELETE'});toast('Excluída','ok');showList();}catch(e){toast(e.message,'err');}}
 
-// create
+function tabSend(I){
+  body(`<div class="card">
+    <div class="field"><label>Número (com DDI, ex: 5512999998888)</label><input id="sNum"></div>
+    <div class="field"><label>Mensagem</label><textarea id="sText" rows="3"></textarea></div>
+    <button class="primary" onclick="doSend()">Enviar texto</button>
+  </div>`);
+}
+window.doSend=async()=>{
+  try{const r=await api('/message/sendText/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify({number:$('#sNum').value,text:$('#sText').value})});
+    toast('Enviado · id '+(r.key?.id||'').slice(0,10),'ok');$('#sText').value='';
+  }catch(e){toast(e.message,'err');}
+}
+
+async function tabWebhook(I){
+  body('<div class="card muted">carregando…</div>');
+  let url=''; try{url=(await api('/webhook/find/'+I)).url||'';}catch(e){}
+  body(`<div class="card">
+    <div class="field"><label>Webhook URL</label><input id="wUrl" value="${url.replace(/"/g,'&quot;')}" placeholder="https://.../webhook"></div>
+    <button class="primary" onclick="saveHook()">Salvar webhook</button>
+    <p class="muted" style="margin-bottom:0">Eventos entregues no padrão Evolution: <code>messages.upsert</code>, <code>connection.update</code>.</p>
+  </div>`);
+}
+window.saveHook=async()=>{try{await api('/webhook/set/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify({url:$('#wUrl').value})});toast('Webhook salvo','ok');}catch(e){toast(e.message,'err');}}
+
+async function tabSettings(I){
+  body('<div class="card muted">carregando…</div>');
+  let s={}; try{s=await api('/settings/find/'+I)||{};}catch(e){}
+  const cb=(k,l)=>`<div class="toggle"><input type="checkbox" id="set_${k}" ${s[k]?'checked':''}><label style="margin:0">${l}</label></div>`;
+  body(`<div class="card">
+    ${cb('rejectCall','Rejeitar chamadas')}
+    <div class="field"><label>Mensagem ao rejeitar chamada</label><input id="set_msgCall" value="${(s.msgCall||'').replace(/"/g,'&quot;')}"></div>
+    ${cb('alwaysOnline','Sempre online')}
+    ${cb('readMessages','Marcar mensagens como lidas')}
+    ${cb('readStatus','Marcar status como visto')}
+    ${cb('groupsIgnore','Ignorar grupos')}
+    ${cb('syncFullHistory','Sincronizar histórico completo')}
+    <button class="primary" onclick="saveSettings()">Salvar settings</button>
+    <p class="muted" style="margin-bottom:0">Obs: armazenado e ecoado pela API; nem todos os toggles têm efeito ativo neste build.</p>
+  </div>`);
+}
+window.saveSettings=async()=>{
+  const g=k=>$('#set_'+k); const b={rejectCall:g('rejectCall').checked,msgCall:g('msgCall').value,alwaysOnline:g('alwaysOnline').checked,readMessages:g('readMessages').checked,readStatus:g('readStatus').checked,groupsIgnore:g('groupsIgnore').checked,syncFullHistory:g('syncFullHistory').checked};
+  try{await api('/settings/set/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify(b)});toast('Settings salvos','ok');}catch(e){toast(e.message,'err');}
+}
+
+async function tabProxy(I){
+  body('<div class="card muted">carregando…</div>');
+  let p={}; try{p=await api('/proxy/find/'+I)||{};}catch(e){}
+  body(`<div class="card">
+    <div class="toggle"><input type="checkbox" id="px_enabled" ${p.enabled?'checked':''}><label style="margin:0">Proxy habilitado</label></div>
+    <div class="row"><div class="field" style="flex:2"><label>Host</label><input id="px_host" value="${p.host||''}"></div>
+    <div class="field" style="flex:1"><label>Porta</label><input id="px_port" value="${p.port||''}"></div></div>
+    <div class="field"><label>Protocolo</label><input id="px_protocol" value="${p.protocol||'http'}"></div>
+    <div class="row"><div class="field" style="flex:1"><label>Usuário</label><input id="px_username" value="${p.username||''}"></div>
+    <div class="field" style="flex:1"><label>Senha</label><input id="px_password" value="${p.password||''}"></div></div>
+    <button class="primary" onclick="saveProxy()">Salvar proxy</button>
+  </div>`);
+}
+window.saveProxy=async()=>{
+  const g=k=>$('#px_'+k); const b={enabled:g('enabled').checked,host:g('host').value,port:g('port').value,protocol:g('protocol').value,username:g('username').value,password:g('password').value};
+  try{await api('/proxy/set/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify(b)});toast('Proxy salvo','ok');}catch(e){toast(e.message,'err');}
+}
+
+async function tabList(I,path,title,cols){
+  body('<div class="card muted">carregando…</div>');
+  let rows=[]; try{rows=await api(path+I)||[];}catch(e){toast(e.message,'err');}
+  if(!Array.isArray(rows)||!rows.length){body(`<div class="card empty">Nenhum ${title.toLowerCase()} capturado ainda.</div>`);return;}
+  let h=`<div class="card"><div class="muted" style="margin-bottom:8px">${rows.length} ${title.toLowerCase()}</div><table><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+  for(const r of rows.slice(0,200)) h+=`<tr>${cols.map(c=>`<td>${(r[c]??'')}</td>`).join('')}</tr>`;
+  body(h+'</table></div>');
+}
+async function tabGroups(I){
+  body('<div class="card muted">carregando…</div>');
+  let rows=[]; try{rows=await api('/group/fetchAllGroups/'+I)||[];}catch(e){toast(e.message,'err');}
+  if(!rows.length){body('<div class="card empty">Nenhum grupo (ou sessão offline).</div>');return;}
+  let h='<div class="card"><table><tr><th>Assunto</th><th>JID</th><th>Membros</th></tr>';
+  for(const g of rows) h+=`<tr><td>${g.subject||''}</td><td>${g.id||''}</td><td>${(g.participants||[]).length}</td></tr>`;
+  body(h+'</table></div>');
+}
+
+/* ---------- create / login / boot ---------- */
 $('#createBtn').onclick=async()=>{
   const name=$('#newName').value.trim(); if(!name){toast('Informe um nome','err');return;}
   const webhookUrl=$('#newHook').value.trim();
-  try{
-    await api('/instance/create',{method:'POST',body:JSON.stringify({instanceName:name,...(webhookUrl?{webhookUrl}:{})})});
-    $('#newName').value=''; $('#newHook').value='';
-    toast('Instância criada','ok'); await refresh(); openQR(name);
-  }catch(e){ toast(e.message,'err'); }
+  try{await api('/instance/create',{method:'POST',body:JSON.stringify({instanceName:name,...(webhookUrl?{webhookUrl}:{})})});
+    $('#newName').value='';$('#newHook').value='';toast('Instância criada','ok');openInstance(name);
+  }catch(e){toast(e.message,'err');}
 };
-$('#refreshBtn').onclick=refresh;
+$('#refreshBtn').onclick=refreshList;
+$('#backLink').onclick=showList;
+$('#home').onclick=()=>{if(KEY)showList();};
+$('#loginBtn').onclick=()=>{BASE=$('#baseUrl').value.trim();KEY=$('#apiKey').value.trim();if(!BASE){toast('Informe a Base URL','err');return;}localStorage.setItem('wae_base',BASE);localStorage.setItem('wae_key',KEY);showList();};
+$('#logoutBtn').onclick=()=>{localStorage.removeItem('wae_key');KEY='';showLogin();};
 
-// login
-$('#loginBtn').onclick=()=>{
-  BASE=$('#baseUrl').value.trim(); KEY=$('#apiKey').value.trim();
-  if(!BASE){toast('Informe a Base URL','err');return;}
-  localStorage.setItem('wae_base',BASE); localStorage.setItem('wae_key',KEY);
-  start();
-};
-$('#logoutBtn').onclick=()=>{ localStorage.removeItem('wae_key'); KEY=''; showLogin(); };
-
-function start(){
-  showDash(); refresh();
-  if(pollTimer)clearInterval(pollTimer);
-  pollTimer=setInterval(refresh, 6000);
-}
-
-// boot: default base to current origin
-if(!BASE) BASE = location.origin;
+if(!BASE) BASE=location.origin;
 $('#baseUrl').value=BASE; $('#apiKey').value=KEY;
-if(KEY){ start(); } else { showLogin(); }
+if(KEY) showList(); else showLogin();
 </script>
 </body>
 </html>
