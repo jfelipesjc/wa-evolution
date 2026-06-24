@@ -89,6 +89,71 @@ type Backend interface {
 	NewsletterCreate(ctx context.Context, name, channelName, description string) (string, error)
 	// NewsletterFollow follows a channel by JID.
 	NewsletterFollow(ctx context.Context, name, jid string) error
+
+	// --- extended parity surface (Evolution routers) ---
+
+	// Restart best-effort cycles an instance's connection.
+	Restart(name string) error
+	// SendPoll sends a poll; returns the message id.
+	SendPoll(ctx context.Context, name, jid, pollName string, options []string, selectableCount int) (string, error)
+	// SendSticker sends a sticker (webp bytes); returns the message id.
+	SendSticker(ctx context.Context, name, jid string, data []byte, mimetype string) (string, error)
+	// SendWhatsAppAudio sends a PTT voice note (audio bytes); returns the message id.
+	SendWhatsAppAudio(ctx context.Context, name, jid string, data []byte, mimetype string) (string, error)
+
+	// ArchiveChat archives/unarchives a chat (app-state).
+	ArchiveChat(ctx context.Context, name, jid string, archive bool) error
+	// FetchProfilePictureURL returns a contact/group profile picture URL.
+	FetchProfilePictureURL(ctx context.Context, name, jid string, preview bool) (string, error)
+	// FetchBusinessProfile returns a business profile.
+	FetchBusinessProfile(ctx context.Context, name, jid string) (BusinessProfileArg, error)
+	// FetchPrivacy returns the account's privacy settings.
+	FetchPrivacy(ctx context.Context, name string) (map[string]string, error)
+	// UpdatePrivacy sets one privacy toggle (setting -> value).
+	UpdatePrivacy(ctx context.Context, name, setting, value string) error
+	// UpdateBlockStatus blocks/unblocks a contact.
+	UpdateBlockStatus(ctx context.Context, name, jid string, block bool) error
+	// UpdateProfilePicture sets a profile/group picture (jid empty = self).
+	UpdateProfilePicture(ctx context.Context, name, jid string, jpeg []byte) error
+	// RemoveProfilePicture removes a profile/group picture (jid empty = self).
+	RemoveProfilePicture(ctx context.Context, name, jid string) error
+	// FetchProfile returns a composed profile (picture + status) for a JID.
+	FetchProfile(ctx context.Context, name, jid string) (ProfileArg, error)
+	// FindChats lists materialized chats from the instance's ChatStore.
+	FindChats(name string) ([]ChatInfoArg, error)
+	// FindChatByRemoteJID returns one chat from the ChatStore.
+	FindChatByRemoteJID(name, jid string) (ChatInfoArg, bool, error)
+	// FindContacts lists materialized contacts from the instance's ChatStore.
+	FindContacts(name string) ([]ContactArg, error)
+
+	// GroupAcceptInvite joins a group by invite code; returns the group JID.
+	GroupAcceptInvite(ctx context.Context, name, code string) (string, error)
+	// GroupInviteInfo returns metadata for an invite code (preview before joining).
+	GroupInviteInfo(ctx context.Context, name, code string) (GroupArg, error)
+	// GroupRevokeInvite resets a group's invite code; returns the new code.
+	GroupRevokeInvite(ctx context.Context, name, groupJID string) (string, error)
+	// GroupToggleEphemeral sets disappearing-message duration (seconds, 0 = off).
+	GroupToggleEphemeral(ctx context.Context, name, groupJID string, seconds int) error
+	// GroupUpdateDescription sets a group's description.
+	GroupUpdateDescription(ctx context.Context, name, groupJID, desc string) error
+	// GroupUpdateSubject sets a group's subject (name).
+	GroupUpdateSubject(ctx context.Context, name, groupJID, subject string) error
+	// GroupUpdatePicture sets a group's picture (jpeg bytes).
+	GroupUpdatePicture(ctx context.Context, name, groupJID string, jpeg []byte) error
+	// GroupUpdateSetting changes a group setting (announcement|not_announcement|locked|unlocked).
+	GroupUpdateSetting(ctx context.Context, name, groupJID, setting string) error
+	// GroupSendInvite messages an invite link to recipients.
+	GroupSendInvite(ctx context.Context, name, groupJID string, numbers []string, text string) error
+
+	// GetLabels returns the account's defined labels.
+	GetLabels(ctx context.Context, name string) ([]LabelArg, error)
+	// HandleLabel adds/removes a label on a chat (action add|remove).
+	HandleLabel(ctx context.Context, name, chatJID, labelID, action string) error
+
+	// OfferCall rings a contact (signaling only); returns the call id.
+	OfferCall(ctx context.Context, name, jid string, video bool) (string, error)
+	// GetCatalog returns a business catalog (products).
+	GetCatalog(ctx context.Context, name, jid string, limit int) ([]ProductArg, error)
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.

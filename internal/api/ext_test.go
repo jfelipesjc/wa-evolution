@@ -1,0 +1,402 @@
+package api
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"testing"
+)
+
+func TestSendPoll(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendPoll/bot1", testKey, sendPollReq{
+		Number: "5512999", Name: "Lunch?", Values: []string{"Pizza", "Sushi"}, SelectableCount: 1,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-POLL" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+	if len(fb.polls) != 1 || fb.polls[0].pollName != "Lunch?" || len(fb.polls[0].options) != 2 {
+		t.Fatalf("poll recorded %+v", fb.polls)
+	}
+}
+
+func TestSendPoll_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendPoll/bot1", testKey, sendPollReq{Number: "5512", Name: "x", Values: []string{"only"}})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestSendSticker(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	b64 := base64.StdEncoding.EncodeToString([]byte("webp-bytes"))
+	rec := do(t, h, "POST", "/message/sendSticker/bot1", testKey, sendStickerReq{Number: "5512999", Sticker: b64})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSendWhatsAppAudio(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	b64 := base64.StdEncoding.EncodeToString([]byte("ogg-bytes"))
+	rec := do(t, h, "POST", "/message/sendWhatsAppAudio/bot1", testKey, sendAudioReq{Number: "5512999", Audio: b64})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestArchiveChat(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/archiveChat/bot1", testKey, archiveChatReq{Chat: "5512999", Archive: true})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.archives) != 1 || fb.archives[0].jid != "5512999@s.whatsapp.net" || !fb.archives[0].archive {
+		t.Fatalf("archive recorded %+v", fb.archives)
+	}
+}
+
+func TestUpdateBlockStatus(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/updateBlockStatus/bot1", testKey, updateBlockStatusReq{Number: "5512999", Status: "block"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.blocks) != 1 || !fb.blocks[0].block || fb.blocks[0].jid != "5512999@s.whatsapp.net" {
+		t.Fatalf("block recorded %+v", fb.blocks)
+	}
+	rec = do(t, h, "POST", "/chat/updateBlockStatus/bot1", testKey, updateBlockStatusReq{Number: "5512", Status: "explode"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad status = %d, want 400", rec.Code)
+	}
+}
+
+func TestFetchProfilePicture(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/fetchProfilePictureUrl/bot1", testKey, jidQueryReq{Number: "5512999"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var pr profilePictureResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &pr)
+	if pr.ProfilePic == "" || pr.WUID != "5512999@s.whatsapp.net" {
+		t.Fatalf("resp = %+v", pr)
+	}
+}
+
+func TestUpdatePrivacy(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/updatePrivacySettings/bot1", testKey, updatePrivacyReq{Name: "lastSeen", Value: "nobody"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.privacy) != 1 || fb.privacy[0][0] != "lastSeen" || fb.privacy[0][1] != "nobody" {
+		t.Fatalf("privacy recorded %+v", fb.privacy)
+	}
+}
+
+func TestFindChats(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.chats = []ChatInfoArg{{JID: "5512@s.whatsapp.net", Name: "Ana", Pinned: true}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/chat/findChats/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []chatRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || out[0].Name != "Ana" || !out[0].Pinned {
+		t.Fatalf("chats = %+v", out)
+	}
+}
+
+func TestFindChatByRemoteJid(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.chats = []ChatInfoArg{{JID: "5512@s.whatsapp.net", Name: "Ana"}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/findChatByRemoteJid/bot1", testKey, jidQueryReq{Number: "5512"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, "POST", "/chat/findChatByRemoteJid/bot1", testKey, jidQueryReq{Number: "9999"})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing chat status = %d, want 404", rec.Code)
+	}
+}
+
+func TestFindContacts(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.contactsList = []ContactArg{{JID: "5512@s.whatsapp.net", PushName: "Ana"}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/chat/findContacts/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []contactRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || out[0].PushName != "Ana" {
+		t.Fatalf("contacts = %+v", out)
+	}
+}
+
+func TestGroupAcceptInvite(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/acceptInviteCode/bot1", testKey, acceptInviteReq{InviteCode: "ABC"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var ar acceptInviteResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &ar)
+	if ar.GroupJID != "123@g.us" {
+		t.Fatalf("groupJid = %q", ar.GroupJID)
+	}
+}
+
+func TestGroupRevokeInvite(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "PUT", "/group/revokeInviteCode/bot1?groupJid=123@g.us", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var rr revokeInviteResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &rr)
+	if rr.InviteCode != "NEWCODE" || rr.InviteURL != "https://chat.whatsapp.com/NEWCODE" {
+		t.Fatalf("revoke = %+v", rr)
+	}
+}
+
+func TestGroupInviteInfo(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/group/inviteInfo/bot1?inviteCode=ABC", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var g groupRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &g)
+	if g.Subject != "Invited Group" {
+		t.Fatalf("group = %+v", g)
+	}
+}
+
+func TestGroupUpdateSubject(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "PUT", "/group/updateGroupSubject/bot1", testKey, updateGroupSubjectReq{GroupJID: "123@g.us", Subject: "New Name"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.groupSubjects) != 1 || fb.groupSubjects[0][1] != "New Name" {
+		t.Fatalf("subjects = %+v", fb.groupSubjects)
+	}
+}
+
+func TestGroupSendInvite(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/group/sendInvite/bot1", testKey, sendInviteReq{
+		GroupJID: "123@g.us", Numbers: []string{"5512999"}, Description: "join us",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.groupInvites) != 1 || fb.groupInvites[0].numbers[0] != "5512999@s.whatsapp.net" {
+		t.Fatalf("invites = %+v", fb.groupInvites)
+	}
+}
+
+func TestGroupToggleEphemeral(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "PUT", "/group/toggleEphemeral/bot1", testKey, toggleEphemeralReq{GroupJID: "123@g.us", Expiration: 604800})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGroupUpdateSetting(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "PUT", "/group/updateSetting/bot1", testKey, updateGroupSettingReq{GroupJID: "123@g.us", Action: "announcement"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, "PUT", "/group/updateSetting/bot1", testKey, updateGroupSettingReq{GroupJID: "123@g.us", Action: "nope"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad action status = %d, want 400", rec.Code)
+	}
+}
+
+func TestFindLabels(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.labels = []LabelArg{{ID: "1", Name: "Cliente", Color: "5"}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/label/findLabels/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []labelRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || out[0].Name != "Cliente" {
+		t.Fatalf("labels = %+v", out)
+	}
+}
+
+func TestHandleLabel(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/label/handleLabel/bot1", testKey, handleLabelReq{Number: "5512999", LabelID: "1", Action: "add"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.labelOps) != 1 || fb.labelOps[0].action != "add" || fb.labelOps[0].chatJID != "5512999@s.whatsapp.net" {
+		t.Fatalf("labelOps = %+v", fb.labelOps)
+	}
+}
+
+func TestOfferCall(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/call/offer/bot1", testKey, offerCallReq{Number: "5512999", IsVideo: true})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var or offerCallResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &or)
+	if or.CallID != "CALLID-1" {
+		t.Fatalf("callId = %q", or.CallID)
+	}
+}
+
+func TestGetCatalog(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.products = []ProductArg{{ID: "p1", Name: "Plano", Price: 2990, Currency: "BRL"}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/business/getCatalog/bot1", testKey, getCatalogReq{Number: "5512999", Limit: 10})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []productRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || out[0].Name != "Plano" || out[0].Price != 2990 {
+		t.Fatalf("products = %+v", out)
+	}
+}
+
+func TestSetPresenceGlobal(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/instance/setPresence/bot1", testKey, setPresenceReq{Presence: "available"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.presences) != 1 || fb.presences[0].presence != "available" {
+		t.Fatalf("presence = %+v", fb.presences)
+	}
+}
+
+func TestRestart(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "PUT", "/instance/restart/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, "PUT", "/instance/restart/ghost", testKey, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("ghost restart status = %d, want 404", rec.Code)
+	}
+}
+
+func TestSettingsSetAndFind(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/settings/set/bot1", testKey, settingsBody{RejectCall: true, MsgCall: "estou ocupado"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, "GET", "/settings/find/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("find status = %d", rec.Code)
+	}
+	var got settingsBody
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if !got.RejectCall || got.MsgCall != "estou ocupado" {
+		t.Fatalf("settings = %+v", got)
+	}
+}
+
+func TestProxySetAndFind(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/proxy/set/bot1", testKey, proxyBody{Enabled: true, Host: "1.2.3.4", Port: "8080", Protocol: "http"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, "GET", "/proxy/find/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("find status = %d", rec.Code)
+	}
+	var got proxyBody
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if !got.Enabled || got.Host != "1.2.3.4" {
+		t.Fatalf("proxy = %+v", got)
+	}
+}
+
+func TestDeleteMessageForEveryone_ChatAlias(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/deleteMessageForEveryone/bot1", testKey, deleteMessageReq{
+		Key: &messageKey{RemoteJID: "5512999", ID: "DEL1", FromMe: true},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.deletes) != 1 {
+		t.Fatalf("delete not recorded via chat alias")
+	}
+}

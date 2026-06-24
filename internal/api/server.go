@@ -36,6 +36,11 @@ type Server struct {
 	// /webhook/set). Guarded by the dispatcher's mutex (see webhook.go).
 	dispatcher *webhookDispatcher
 
+	// cfg holds per-instance Evolution settings/proxy blobs. These are app-level
+	// config Evolution stores and echoes back; this build keeps them in memory and
+	// returns them on find (it does not yet act on rejectCall/alwaysOnline/proxy).
+	cfg *configStore
+
 	logger *log.Logger
 }
 
@@ -64,6 +69,7 @@ func New(opts Options) *Server {
 		backend:    opts.Backend,
 		mux:        http.NewServeMux(),
 		dispatcher: newWebhookDispatcher(opts.HTTPClient, logger),
+		cfg:        newConfigStore(),
 		logger:     logger,
 	}
 	s.dispatcher.setDir(opts.WebhookDir)
@@ -120,6 +126,66 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /message/sendStatus/{instance}", s.handleSendStatus)
 	s.mux.HandleFunc("POST /newsletter/create/{instance}", s.handleNewsletterCreate)
 	s.mux.HandleFunc("POST /newsletter/follow/{instance}", s.handleNewsletterFollow)
+
+	// --- extended Evolution-parity surface ---
+
+	// instance
+	s.mux.HandleFunc("PUT /instance/restart/{instance}", s.handleRestart)
+	s.mux.HandleFunc("POST /instance/setPresence/{instance}", s.handleSetPresence)
+
+	// message
+	s.mux.HandleFunc("POST /message/sendPoll/{instance}", s.handleSendPoll)
+	s.mux.HandleFunc("POST /message/sendSticker/{instance}", s.handleSendSticker)
+	s.mux.HandleFunc("POST /message/sendWhatsAppAudio/{instance}", s.handleSendWhatsAppAudio)
+
+	// chat
+	s.mux.HandleFunc("POST /chat/archiveChat/{instance}", s.handleArchiveChat)
+	s.mux.HandleFunc("POST /chat/deleteMessageForEveryone/{instance}", s.handleDeleteMessage)
+	s.mux.HandleFunc("POST /chat/updateMessage/{instance}", s.handleEditMessage)
+	s.mux.HandleFunc("POST /chat/fetchProfilePictureUrl/{instance}", s.handleFetchProfilePicture)
+	s.mux.HandleFunc("POST /chat/fetchBusinessProfile/{instance}", s.handleFetchBusinessProfile)
+	s.mux.HandleFunc("POST /chat/fetchProfile/{instance}", s.handleFetchProfile)
+	s.mux.HandleFunc("GET /chat/fetchPrivacySettings/{instance}", s.handleFetchPrivacy)
+	s.mux.HandleFunc("POST /chat/updatePrivacySettings/{instance}", s.handleUpdatePrivacy)
+	s.mux.HandleFunc("POST /chat/updateBlockStatus/{instance}", s.handleUpdateBlockStatus)
+	s.mux.HandleFunc("PUT /chat/updateProfilePicture/{instance}", s.handleUpdateProfilePicture)
+	s.mux.HandleFunc("DELETE /chat/removeProfilePicture/{instance}", s.handleRemoveProfilePicture)
+	s.mux.HandleFunc("POST /chat/findChats/{instance}", s.handleFindChats)
+	s.mux.HandleFunc("GET /chat/findChats/{instance}", s.handleFindChats)
+	s.mux.HandleFunc("POST /chat/findChatByRemoteJid/{instance}", s.handleFindChatByRemoteJid)
+	s.mux.HandleFunc("POST /chat/findContacts/{instance}", s.handleFindContacts)
+	s.mux.HandleFunc("GET /chat/findContacts/{instance}", s.handleFindContacts)
+
+	// group
+	s.mux.HandleFunc("GET /group/findGroupInfos/{instance}", s.handleGroupMetadata)
+	s.mux.HandleFunc("GET /group/participants/{instance}", s.handleGroupParticipants)
+	s.mux.HandleFunc("GET /group/inviteInfo/{instance}", s.handleGroupInviteInfo)
+	s.mux.HandleFunc("POST /group/acceptInviteCode/{instance}", s.handleGroupAcceptInvite)
+	s.mux.HandleFunc("PUT /group/revokeInviteCode/{instance}", s.handleGroupRevokeInvite)
+	s.mux.HandleFunc("POST /group/sendInvite/{instance}", s.handleGroupSendInvite)
+	s.mux.HandleFunc("PUT /group/updateGroupSubject/{instance}", s.handleGroupUpdateSubject)
+	s.mux.HandleFunc("PUT /group/updateGroupDescription/{instance}", s.handleGroupUpdateDescription)
+	s.mux.HandleFunc("PUT /group/updateGroupPicture/{instance}", s.handleGroupUpdatePicture)
+	s.mux.HandleFunc("PUT /group/toggleEphemeral/{instance}", s.handleGroupToggleEphemeral)
+	s.mux.HandleFunc("PUT /group/updateSetting/{instance}", s.handleGroupUpdateSetting)
+
+	// labels
+	s.mux.HandleFunc("GET /label/findLabels/{instance}", s.handleFindLabels)
+	s.mux.HandleFunc("POST /label/handleLabel/{instance}", s.handleHandleLabel)
+
+	// call
+	s.mux.HandleFunc("POST /call/offer/{instance}", s.handleOfferCall)
+
+	// business
+	s.mux.HandleFunc("POST /business/getCatalog/{instance}", s.handleGetCatalog)
+
+	// settings (instance config; stored + echoed)
+	s.mux.HandleFunc("POST /settings/set/{instance}", s.handleSetSettings)
+	s.mux.HandleFunc("GET /settings/find/{instance}", s.handleFindSettings)
+
+	// proxy (instance config; stored + echoed)
+	s.mux.HandleFunc("POST /proxy/set/{instance}", s.handleSetProxy)
+	s.mux.HandleFunc("GET /proxy/find/{instance}", s.handleFindProxy)
 }
 
 // authMiddleware enforces the global apikey on every request. The apikey is read

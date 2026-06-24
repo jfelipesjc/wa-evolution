@@ -53,6 +53,41 @@ type fakeBackend struct {
 	lists     []sentList
 	locations []sentLocation
 	contacts  []sentContact
+
+	// extended parity surface
+	polls         []sentPoll
+	archives      []sentArchive
+	privacy       [][2]string
+	blocks        []sentBlock
+	chats         []ChatInfoArg
+	contactsList  []ContactArg
+	groupSubjects [][2]string
+	groupInvites  []sentGroupInvite
+	labels        []LabelArg
+	labelOps      []sentLabelOp
+	products      []ProductArg
+}
+
+type sentPoll struct {
+	name, jid, pollName string
+	options             []string
+	selectable          int
+}
+type sentArchive struct {
+	name, jid string
+	archive   bool
+}
+type sentBlock struct {
+	jid   string
+	block bool
+}
+type sentGroupInvite struct {
+	groupJID string
+	numbers  []string
+	text     string
+}
+type sentLabelOp struct {
+	chatJID, labelID, action string
 }
 
 type sentDelete struct {
