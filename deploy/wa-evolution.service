@@ -1,0 +1,22 @@
+[Unit]
+Description=wa-evolution (WhatsApp service em Go sobre wa-go)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wa
+Group=wa
+WorkingDirectory=/opt/wa-evolution
+# apikey e porta vêm do EnvironmentFile (não commitar o .env)
+EnvironmentFile=/opt/wa-evolution/wa-evolution.env
+ExecStart=/opt/wa-evolution/wa-server -addr ${ADDR} -apikey ${APIKEY} -dir /opt/wa-evolution/instances
+Restart=always
+RestartSec=3
+# hardening básico
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/wa-evolution/instances
+
+[Install]
+WantedBy=multi-user.target
