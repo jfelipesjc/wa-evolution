@@ -77,6 +77,18 @@ type Backend interface {
 	GroupInviteCode(ctx context.Context, name, groupJID string) (string, error)
 	// GroupLeave leaves a group.
 	GroupLeave(ctx context.Context, name, groupJID string) error
+
+	// --- profile / status / newsletter ---
+	// ProfileSetName updates the account's display name.
+	ProfileSetName(ctx context.Context, name, displayName string) error
+	// ProfileSetStatus updates the account's "about" / status text.
+	ProfileSetStatus(ctx context.Context, name, status string) error
+	// PostStatus posts a text status (story) to the given recipient JIDs.
+	PostStatus(ctx context.Context, name, text string, recipients []string) (string, error)
+	// NewsletterCreate creates a channel and returns its JID.
+	NewsletterCreate(ctx context.Context, name, channelName, description string) (string, error)
+	// NewsletterFollow follows a channel by JID.
+	NewsletterFollow(ctx context.Context, name, jid string) error
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.

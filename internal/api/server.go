@@ -112,6 +112,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /group/updateParticipant/{instance}", s.handleUpdateParticipant)
 	s.mux.HandleFunc("GET /group/inviteCode/{instance}", s.handleInviteCode)
 	s.mux.HandleFunc("POST /group/leave/{instance}", s.handleLeaveGroup)
+
+	// profile / status / newsletter
+	s.mux.HandleFunc("POST /chat/updateProfileName/{instance}", s.handleProfileSetName)
+	s.mux.HandleFunc("POST /chat/updateProfileStatus/{instance}", s.handleProfileSetStatus)
+	s.mux.HandleFunc("POST /message/sendStatus/{instance}", s.handleSendStatus)
+	s.mux.HandleFunc("POST /newsletter/create/{instance}", s.handleNewsletterCreate)
+	s.mux.HandleFunc("POST /newsletter/follow/{instance}", s.handleNewsletterFollow)
 }
 
 // authMiddleware enforces the global apikey on every request. The apikey is read

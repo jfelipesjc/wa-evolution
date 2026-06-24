@@ -276,6 +276,22 @@ func (f *fakeBackend) GroupLeave(ctx context.Context, name, groupJID string) err
 	return nil
 }
 
+func (f *fakeBackend) ProfileSetName(ctx context.Context, name, displayName string) error {
+	return nil
+}
+func (f *fakeBackend) ProfileSetStatus(ctx context.Context, name, status string) error {
+	return nil
+}
+func (f *fakeBackend) PostStatus(ctx context.Context, name, text string, recipients []string) (string, error) {
+	return "STATUSID", nil
+}
+func (f *fakeBackend) NewsletterCreate(ctx context.Context, name, channelName, description string) (string, error) {
+	return "123@newsletter", nil
+}
+func (f *fakeBackend) NewsletterFollow(ctx context.Context, name, jid string) error {
+	return nil
+}
+
 // --- helpers ---
 
 const testKey = "secret-key"
