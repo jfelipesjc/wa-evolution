@@ -137,6 +137,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /message/sendPoll/{instance}", s.handleSendPoll)
 	s.mux.HandleFunc("POST /message/sendSticker/{instance}", s.handleSendSticker)
 	s.mux.HandleFunc("POST /message/sendWhatsAppAudio/{instance}", s.handleSendWhatsAppAudio)
+	s.mux.HandleFunc("POST /message/sendPtv/{instance}", s.handleSendPtv)
 
 	// chat
 	s.mux.HandleFunc("POST /chat/archiveChat/{instance}", s.handleArchiveChat)

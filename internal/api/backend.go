@@ -100,6 +100,8 @@ type Backend interface {
 	SendSticker(ctx context.Context, name, jid string, data []byte, mimetype string) (string, error)
 	// SendWhatsAppAudio sends a PTT voice note (audio bytes); returns the message id.
 	SendWhatsAppAudio(ctx context.Context, name, jid string, data []byte, mimetype string) (string, error)
+	// SendPtv sends a round video note (PTV); returns the message id.
+	SendPtv(ctx context.Context, name, jid string, data []byte, mimetype string) (string, error)
 
 	// ArchiveChat archives/unarchives a chat (app-state).
 	ArchiveChat(ctx context.Context, name, jid string, archive bool) error

@@ -28,6 +28,10 @@ func (f *fakeBackend) SendWhatsAppAudio(ctx context.Context, name, jid string, d
 	return "MSGID-AUDIO", nil
 }
 
+func (f *fakeBackend) SendPtv(ctx context.Context, name, jid string, data []byte, mimetype string) (string, error) {
+	return "MSGID-PTV", nil
+}
+
 func (f *fakeBackend) ArchiveChat(ctx context.Context, name, jid string, archive bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

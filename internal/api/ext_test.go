@@ -59,6 +59,32 @@ func TestSendWhatsAppAudio(t *testing.T) {
 	}
 }
 
+func TestSendPtv(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	b64 := base64.StdEncoding.EncodeToString([]byte("mp4-bytes"))
+	rec := do(t, h, "POST", "/message/sendPtv/bot1", testKey, sendPtvReq{Number: "5512999", Video: b64})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var sr sendResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &sr)
+	if sr.Key.ID != "MSGID-PTV" {
+		t.Fatalf("key.id = %q", sr.Key.ID)
+	}
+}
+
+func TestSendPtv_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/sendPtv/bot1", testKey, sendPtvReq{Number: "5512"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
 func TestArchiveChat(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")

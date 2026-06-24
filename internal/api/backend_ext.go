@@ -105,6 +105,15 @@ func (b *ManagerBackend) SendWhatsAppAudio(ctx context.Context, name, jid string
 	return c.SendAudioBytes(ctx, jid, data, mimetype)
 }
 
+func (b *ManagerBackend) SendPtv(ctx context.Context, name, jid string, data []byte, mimetype string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	c.EnableDefaultMediaTransfer()
+	return c.SendPtvBytes(ctx, jid, data, mimetype)
+}
+
 func (b *ManagerBackend) ArchiveChat(ctx context.Context, name, jid string, archive bool) error {
 	c, err := b.liveClient(name)
 	if err != nil {

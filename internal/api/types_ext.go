@@ -24,6 +24,12 @@ type sendAudioReq struct {
 	Mimetype string `json:"mimetype"`
 }
 
+type sendPtvReq struct {
+	Number   string `json:"number"`
+	Video    string `json:"video"` // base64 or data URI (mp4)
+	Mimetype string `json:"mimetype"`
+}
+
 // --- chat ---
 
 type archiveChatReq struct {

@@ -115,6 +115,31 @@ func (s *Server) handleSendWhatsAppAudio(w http.ResponseWriter, r *http.Request)
 	s.writeJSON(w, http.StatusCreated, sendResp{Key: messageKey{RemoteJID: jid, FromMe: true, ID: id}, Status: sendStatusPending})
 }
 
+// handleSendPtv: POST /message/sendPtv/{instance} {number, video, mimetype?}.
+func (s *Server) handleSendPtv(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req sendPtvReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number == "" || req.Video == "" {
+		s.writeError(w, http.StatusBadRequest, "number and video are required")
+		return
+	}
+	data, err := decodeMedia(req.Video)
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "video must be base64: "+err.Error())
+		return
+	}
+	jid := normalizeJID(req.Number)
+	id, err := s.backend.SendPtv(r.Context(), name, jid, data, req.Mimetype)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, sendResp{Key: messageKey{RemoteJID: jid, FromMe: true, ID: id}, Status: sendStatusPending})
+}
+
 // --- chat ---
 
 // handleArchiveChat: POST /chat/archiveChat/{instance} {chat, archive}.
