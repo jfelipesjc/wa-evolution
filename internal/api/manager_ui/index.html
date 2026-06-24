@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wa-evolution · Manager</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --text:#e6edf3; --muted:#8b949e; --accent:#2ea043; --accent2:#238636;
+    --danger:#da3633; --warn:#d29922; --blue:#388bfd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--panel)}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:2px 8px;border-radius:20px}
+  header .spacer{flex:1}
+  main{max-width:1100px;margin:0 auto;padding:20px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input,button,select{font:inherit;border-radius:6px;border:1px solid var(--border)}
+  input{background:var(--panel2);color:var(--text);padding:8px 10px}
+  input:focus{outline:none;border-color:var(--blue)}
+  button{background:var(--panel2);color:var(--text);padding:8px 12px;cursor:pointer;transition:.1s}
+  button:hover{border-color:var(--muted)}
+  button.primary{background:var(--accent2);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:var(--accent)}
+  button.danger{color:#ff7b72;border-color:#5c2b29}
+  button.danger:hover{background:#3d1d1c}
+  button.ghost{background:transparent}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .inst{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .inst h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px;word-break:break-all}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .dot.open{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+  .dot.connecting{background:var(--warn)}
+  .dot.close{background:var(--muted)}
+  .status{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .inst .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+  .inst .acts button{padding:5px 9px;font-size:12px}
+  .qr{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px;background:#fff;border-radius:8px}
+  .qr img{width:200px;height:200px;image-rendering:pixelated}
+  .qr small{color:#222}
+  .muted{color:var(--muted)}
+  .empty{text-align:center;color:var(--muted);padding:40px}
+  .toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--blue);padding:12px 16px;border-radius:8px;max-width:340px;opacity:0;transform:translateY(8px);transition:.2s}
+  .toast.show{opacity:1;transform:none}
+  .toast.err{border-left-color:var(--danger)}
+  .toast.ok{border-left-color:var(--accent)}
+  dialog{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:0;max-width:90vw}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  .dlg-body{padding:20px;display:flex;flex-direction:column;gap:14px;min-width:300px}
+  .dlg-body h2{margin:0;font-size:16px}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+  .field input{width:100%}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🟢 wa-evolution</h1>
+  <span class="badge" id="serverBadge">Manager</span>
+  <div class="spacer"></div>
+  <span class="muted" id="connInfo"></span>
+  <button class="ghost" id="logoutBtn" title="Trocar API key">🔑</button>
+</header>
+<main>
+  <!-- login -->
+  <div class="card hide" id="loginCard">
+    <h2 style="margin-top:0">Conectar ao servidor</h2>
+    <p class="muted">Informe a URL base e a API key global do servidor wa-evolution.</p>
+    <div class="row">
+      <div class="field" style="flex:1;min-width:200px"><label>Base URL</label><input id="baseUrl" placeholder="https://whats.seudominio.com"></div>
+      <div class="field" style="flex:1;min-width:200px"><label>API key</label><input id="apiKey" type="password" placeholder="apikey"></div>
+    </div>
+    <div class="row"><button class="primary" id="loginBtn">Entrar</button></div>
+  </div>
+
+  <!-- dashboard -->
+  <div id="dash" class="hide">
+    <div class="card">
+      <div class="row">
+        <div class="field" style="flex:1;min-width:220px"><label>Nova instância</label><input id="newName" placeholder="nome-da-instancia"></div>
+        <div class="field" style="flex:2;min-width:220px"><label>Webhook URL (opcional)</label><input id="newHook" placeholder="https://.../webhook"></div>
+        <button class="primary" id="createBtn" style="align-self:flex-end">+ Criar</button>
+        <button class="ghost" id="refreshBtn" style="align-self:flex-end">↻ Atualizar</button>
+      </div>
+    </div>
+    <div id="list" class="grid"></div>
+    <div id="empty" class="empty hide">Nenhuma instância. Crie a primeira acima.</div>
+  </div>
+</main>
+
+<!-- QR dialog -->
+<dialog id="qrDlg">
+  <div class="dlg-body" style="align-items:center">
+    <h2 id="qrTitle">Parear instância</h2>
+    <div class="qr" id="qrBox"><span class="muted" style="color:#666">gerando QR…</span></div>
+    <p class="muted" style="text-align:center;margin:0">Abra o WhatsApp → Aparelhos conectados → Conectar aparelho</p>
+    <button id="qrClose">Fechar</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let BASE = localStorage.getItem('wae_base') || '';
+let KEY  = localStorage.getItem('wae_key')  || '';
+let pollTimer = null, qrTimer = null;
+
+function toast(msg, kind){
+  const t=$('#toast'); t.textContent=msg; t.className='toast show '+(kind||'');
+  setTimeout(()=>t.className='toast',2600);
+}
+async function api(path, opts={}){
+  const r = await fetch(BASE.replace(/\/$/,'')+path, {
+    ...opts,
+    headers:{'apikey':KEY,'Content-Type':'application/json',...(opts.headers||{})}
+  });
+  const txt = await r.text();
+  let data; try{data=txt?JSON.parse(txt):null}catch(e){data=txt}
+  if(!r.ok) throw new Error((data&&data.message)||r.status+' '+r.statusText);
+  return data;
+}
+
+function showLogin(){ $('#loginCard').classList.remove('hide'); $('#dash').classList.add('hide'); if(pollTimer)clearInterval(pollTimer); }
+function showDash(){ $('#loginCard').classList.add('hide'); $('#dash').classList.remove('hide'); $('#connInfo').textContent=BASE.replace(/^https?:\/\//,''); }
+
+const STATUS_LABEL={open:'conectado',connecting:'conectando',close:'desconectado'};
+function statusClass(s){ return s==='open'?'open':(s==='connecting'?'connecting':'close'); }
+
+async function refresh(){
+  try{
+    const list = await api('/instance/fetchInstances');
+    const el = $('#list'); el.innerHTML='';
+    const arr = Array.isArray(list)?list:[];
+    $('#empty').classList.toggle('hide', arr.length>0);
+    for(const it of arr){
+      const name = it.instanceName||it.name||it.instance||'?';
+      const st = it.connectionStatus||it.state||'close';
+      const card = document.createElement('div'); card.className='inst';
+      card.innerHTML = `
+        <h3><span class="dot ${statusClass(st)}"></span>${name}</h3>
+        <div class="status">${STATUS_LABEL[st]||st}</div>
+        <div class="acts">
+          ${st==='open'
+            ? `<button data-act="logout" data-n="${name}">Desconectar</button>`
+            : `<button class="primary" data-act="qr" data-n="${name}">Parear (QR)</button>`}
+          <button data-act="restart" data-n="${name}">Reiniciar</button>
+          <button data-act="hook" data-n="${name}">Webhook</button>
+          <button class="danger" data-act="del" data-n="${name}">Excluir</button>
+        </div>`;
+      el.appendChild(card);
+    }
+  }catch(e){
+    toast('Falha ao listar: '+e.message,'err');
+    if(String(e.message).includes('401')||/apikey/i.test(e.message)){ showLogin(); }
+  }
+}
+
+// event delegation for instance actions
+$('#list').addEventListener('click', async e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  const n=b.dataset.n, act=b.dataset.act;
+  try{
+    if(act==='qr'){ openQR(n); }
+    else if(act==='logout'){ await api('/instance/logout/'+encodeURIComponent(n)); toast('Desconectado','ok'); refresh(); }
+    else if(act==='restart'){ await api('/instance/restart/'+encodeURIComponent(n),{method:'PUT'}); toast('Reiniciando…','ok'); refresh(); }
+    else if(act==='del'){ if(confirm('Excluir a instância "'+n+'"? Isso apaga a sessão.')){ await api('/instance/delete/'+encodeURIComponent(n),{method:'DELETE'}); toast('Excluída','ok'); refresh(); } }
+    else if(act==='hook'){ const url=prompt('Webhook URL para "'+n+'":'); if(url!=null){ await api('/webhook/set/'+encodeURIComponent(n),{method:'POST',body:JSON.stringify({url})}); toast('Webhook salvo','ok'); } }
+  }catch(err){ toast(err.message,'err'); }
+});
+
+// QR pairing
+async function openQR(name){
+  $('#qrTitle').textContent='Parear: '+name;
+  $('#qrBox').innerHTML='<span class="muted" style="color:#666">gerando QR…</span>';
+  $('#qrDlg').showModal();
+  const tick = async ()=>{
+    try{
+      const r = await api('/instance/connect/'+encodeURIComponent(name));
+      if(r && (r.connectionStatus==='open')){ $('#qrBox').innerHTML='<small>✅ Conectado!</small>'; clearInterval(qrTimer); setTimeout(()=>{$('#qrDlg').close();refresh()},1200); return; }
+      const img = r && (r.base64|| (r.code&&r.code.startsWith('data:')?r.code:''));
+      if(img){ $('#qrBox').innerHTML=`<img src="${img}" alt="QR"><small>escaneie</small>`; }
+    }catch(e){ /* keep polling */ }
+  };
+  await tick();
+  if(qrTimer)clearInterval(qrTimer);
+  qrTimer=setInterval(tick, 3000);
+}
+$('#qrClose').onclick=()=>{ $('#qrDlg').close(); };
+$('#qrDlg').addEventListener('close',()=>{ if(qrTimer)clearInterval(qrTimer); refresh(); });
+
+// create
+$('#createBtn').onclick=async()=>{
+  const name=$('#newName').value.trim(); if(!name){toast('Informe um nome','err');return;}
+  const webhookUrl=$('#newHook').value.trim();
+  try{
+    await api('/instance/create',{method:'POST',body:JSON.stringify({instanceName:name,...(webhookUrl?{webhookUrl}:{})})});
+    $('#newName').value=''; $('#newHook').value='';
+    toast('Instância criada','ok'); await refresh(); openQR(name);
+  }catch(e){ toast(e.message,'err'); }
+};
+$('#refreshBtn').onclick=refresh;
+
+// login
+$('#loginBtn').onclick=()=>{
+  BASE=$('#baseUrl').value.trim(); KEY=$('#apiKey').value.trim();
+  if(!BASE){toast('Informe a Base URL','err');return;}
+  localStorage.setItem('wae_base',BASE); localStorage.setItem('wae_key',KEY);
+  start();
+};
+$('#logoutBtn').onclick=()=>{ localStorage.removeItem('wae_key'); KEY=''; showLogin(); };
+
+function start(){
+  showDash(); refresh();
+  if(pollTimer)clearInterval(pollTimer);
+  pollTimer=setInterval(refresh, 6000);
+}
+
+// boot: default base to current origin
+if(!BASE) BASE = location.origin;
+$('#baseUrl').value=BASE; $('#apiKey').value=KEY;
+if(KEY){ start(); } else { showLogin(); }
+</script>
+</body>
+</html>

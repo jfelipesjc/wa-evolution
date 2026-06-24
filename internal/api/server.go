@@ -191,6 +191,10 @@ func (s *Server) routes() {
 	// proxy (instance config; stored + echoed)
 	s.mux.HandleFunc("POST /proxy/set/{instance}", s.handleSetProxy)
 	s.mux.HandleFunc("GET /proxy/find/{instance}", s.handleFindProxy)
+
+	// Manager UI (static single-page dashboard, exempt from apikey auth).
+	s.mux.HandleFunc("GET /manager", s.handleManager)
+	s.mux.HandleFunc("GET /manager/", s.handleManager)
 }
 
 // authMiddleware enforces the global apikey on every request. The apikey is read
@@ -198,6 +202,12 @@ func (s *Server) routes() {
 // disables auth (development only).
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The /manager UI (static HTML/JS served from the binary) is public; the
+		// API calls it issues from the browser carry the apikey the operator pastes.
+		if r.URL.Path == "/manager" || strings.HasPrefix(r.URL.Path, "/manager/") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if s.apikey != "" {
 			got := r.Header.Get("apikey")
 			if got == "" {
