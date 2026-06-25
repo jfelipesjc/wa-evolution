@@ -70,16 +70,30 @@ func TestCreateWithNumber_PairingCode(t *testing.T) {
 	if fb.lastCreateNumber != "+55 12 99999-8888" {
 		t.Fatalf("CreateWithNumber number = %q", fb.lastCreateNumber)
 	}
-	// connect now returns the pairing code (not a QR) when one is present.
-	fb.pairingCode = "ABCD-1234"
+	// connect WITHOUT ?number -> QR only, never a (stale) pairing code.
+	fb.qr = "2@abc,def"
+	fb.pairingCode = "STALE-9999"
 	rec = do(t, h, "GET", "/instance/connect/bot1", testKey, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("connect status = %d; body=%s", rec.Code, rec.Body.String())
 	}
 	var cr connectResp
 	_ = json.Unmarshal(rec.Body.Bytes(), &cr)
+	if cr.PairingCode != "" {
+		t.Fatalf("QR path leaked pairingCode = %q, want empty", cr.PairingCode)
+	}
+	if cr.Code == "" {
+		t.Fatalf("QR path returned no code")
+	}
+	// connect WITH ?number -> pairing code via RequestPairingCode.
+	fb.pairingCode = "ABCD-1234"
+	rec = do(t, h, "GET", "/instance/connect/bot1?number=5512999998888", testKey, nil)
+	_ = json.Unmarshal(rec.Body.Bytes(), &cr)
 	if cr.PairingCode != "ABCD-1234" {
-		t.Fatalf("pairingCode = %q, want ABCD-1234", cr.PairingCode)
+		t.Fatalf("?number pairingCode = %q, want ABCD-1234", cr.PairingCode)
+	}
+	if fb.lastReqPairNumber != "5512999998888" {
+		t.Fatalf("RequestPairingCode number = %q", fb.lastReqPairNumber)
 	}
 }
 

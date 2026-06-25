@@ -445,6 +445,9 @@
       <button class="x-btn" id="closePair" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     </div>
     <div class="modal-body" id="pairBody" style="display:flex;flex-direction:column;align-items:center;gap:8px"></div>
+    <div class="modal-foot">
+      <button class="ghost" id="regenPair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Gerar novamente</button>
+    </div>
   </div>
 </div>
 <div class="modal-bg" id="createModal">
@@ -811,9 +814,11 @@ async function tabOverview(I){
 
   // NÃO gera QR/código automaticamente — só após o usuário clicar num botão.
 }
+let pairMode='qr'; // modo atual do modal (para "Gerar novamente")
 // startPair só é disparado por clique. mode: 'qr' | 'code'. Abre num MODAL.
 window.startPair=(mode)=>{
-  if(mode==='code'){ openCodeForm(); return; }
+  if(mode==='code'){ pairMode='code'; openCodeForm(); return; }
+  pairMode='qr';
   $('#pmTitle').textContent='Conectar via QR Code';
   $('#pairBody').innerHTML=`<div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>gerando QR…</small></div></div>`;
   $('#pairModal').classList.add('show');
@@ -857,8 +862,16 @@ function watchUntilOpen(I){
     }catch(e){}
   },3000);
 }
+// "Gerar novamente": reinicia a conexão e re-dispara o modo atual (QR ou código).
+window.regenPair=async()=>{
+  stopQR();
+  $('#pairBody').innerHTML=`<div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>reiniciando…</small></div></div>`;
+  try{ await api('/instance/restart/'+encodeURIComponent(cur),{method:'PUT'}); }catch(e){}
+  setTimeout(()=>{ if(pairMode==='code') openCodeForm(); else startPair('qr'); }, 1400);
+};
 function closePairModal(){$('#pairModal').classList.remove('show');stopQR();}
 $('#closePair').onclick=closePairModal;
+$('#regenPair').onclick=regenPair;
 $('#pairModal').onclick=e=>{if(e.target===$('#pairModal'))closePairModal();};
 async function pollQR(I){
   let tries=0;
