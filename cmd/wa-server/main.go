@@ -77,8 +77,12 @@ func run(addr, apikey, dir string) error {
 		// drops @g.us, but this avoids the work). Media is fetched lazily from the
 		// ChatStore (already populated by Consume above) only if the bridge needs it.
 		if mev, ok := ev.(wa.MessageEvent); ok && !mev.IsGroup {
+			text := mev.Text
+			if mev.Reaction != nil {
+				text = mev.Reaction.Text // bridge the reaction emoji ("" un-react -> bridge drops)
+			}
 			im := api.InboundMessage{
-				JID: mev.From, MsgID: mev.ID, PushName: mev.PushName, Text: mev.Text,
+				JID: mev.From, MsgID: mev.ID, PushName: mev.PushName, Text: text,
 				IsMedia: mev.Media != nil,
 			}
 			if mev.Media != nil {
