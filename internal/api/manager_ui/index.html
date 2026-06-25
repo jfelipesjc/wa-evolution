@@ -444,9 +444,7 @@
       <h3 id="pmTitle">Conectar</h3>
       <button class="x-btn" id="closePair" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;align-items:center;gap:6px">
-      <div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>gerando…</small></div></div>
-    </div>
+    <div class="modal-body" id="pairBody" style="display:flex;flex-direction:column;align-items:center;gap:8px"></div>
   </div>
 </div>
 <div class="modal-bg" id="createModal">
@@ -761,17 +759,12 @@ async function tabOverview(I){
   const contactsCount=(it.__contacts!=null)?it.__contacts:'—';
   const connected=st==='open';
 
-  const hasNumber=!!(it.number);
-  const qrBtn = hasNumber
-    ? `<button class="sm" disabled title="Esta instância pareia por código (foi criada com número)."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M21 21v.01M17 21h.01M14 21v.01"/></svg>Obter QR Code</button>`
-    : `<button class="primary" onclick="startPair('qr')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M21 21v.01M17 21h.01M14 21v.01"/></svg>Obter QR Code</button>`;
-  const codeBtn = hasNumber
-    ? `<button class="primary" onclick="startPair('code')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>Obter Código</button>`
-    : `<button class="sm" disabled title="Crie a instância informando um número para parear por código.">Obter Código</button>`;
+  const qrBtn = `<button class="primary" onclick="startPair('qr')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M21 21v.01M17 21h.01M14 21v.01"/></svg>Obter QR Code</button>`;
+  const codeBtn = `<button class="sm" onclick="startPair('code')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>Obter Código</button>`;
   const banner = connected ? '' : `
     <div class="banner">
       <div class="bi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/><path d="M13 4h4a3 3 0 0 1 3 3v4M11 20H7a3 3 0 0 1-3-3v-4"/></svg></div>
-      <div class="btxt"><b>Conecte seu WhatsApp</b><span>${hasNumber?'Esta instância pareia por <b>código</b> (criada com número).':'Use o <b>QR Code</b> — ou crie com número para usar código.'}</span></div>
+      <div class="btxt"><b>Conecte seu WhatsApp</b><span>Escaneie o <b>QR Code</b>, ou conecte por <b>código</b> informando o número.</span></div>
       <div class="row" style="gap:8px">${qrBtn}${codeBtn}</div>
     </div>`;
 
@@ -820,12 +813,50 @@ async function tabOverview(I){
 }
 // startPair só é disparado por clique. mode: 'qr' | 'code'. Abre num MODAL.
 window.startPair=(mode)=>{
-  $('#pmTitle').textContent = mode==='code' ? 'Código de pareamento' : 'Conectar via QR Code';
-  const lbl=mode==='code'?'gerando código…':'gerando QR…';
-  $('#qrBox').innerHTML=`<div class="ph"><span class="spinner"></span><small>${lbl}</small></div>`;
+  if(mode==='code'){ openCodeForm(); return; }
+  $('#pmTitle').textContent='Conectar via QR Code';
+  $('#pairBody').innerHTML=`<div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>gerando QR…</small></div></div>`;
   $('#pairModal').classList.add('show');
   pollQR(encodeURIComponent(cur));
 };
+// Passo 1 do código: pedir/confirmar o número (editável, prefill se existir).
+function openCodeForm(){
+  const it=INSTMAP[cur]||{}; const num=it.number||'';
+  const lbl = num ? 'Confirme o número (com DDI e DDD)' : 'Informe o número (com DDI e DDD)';
+  $('#pmTitle').textContent='Código de pareamento';
+  $('#pairBody').innerHTML=`
+    <div class="field" style="width:100%;margin:0">
+      <label for="pairNum">${lbl}</label>
+      <input id="pairNum" value="${esc(num)}" placeholder="55 12 99999-8888" inputmode="tel" autocomplete="off">
+      <div class="hint" style="margin-top:6px">Formato: DDI (55) + DDD (12) + número. Ex.: 55 12 99999-8888.</div>
+    </div>
+    <button class="primary" style="width:100%;margin-top:6px" onclick="genCode()">Gerar código</button>`;
+  $('#pairModal').classList.add('show');
+  setTimeout(()=>{const i=$('#pairNum');if(i){i.focus();i.select();}},60);
+  const i=$('#pairNum'); if(i)i.addEventListener('keydown',e=>{if(e.key==='Enter')genCode();});
+}
+// Passo 2: gera o código UMA vez pro número e exibe; depois só observa a conexão.
+window.genCode=async()=>{
+  const raw=(($('#pairNum')||{}).value||'').replace(/\D/g,'');
+  if(raw.length<12){toast('Número inválido — use DDI + DDD + número','err');return;}
+  $('#pairBody').innerHTML=`<div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>gerando código…</small></div></div>`;
+  try{
+    const r=await api('/instance/connect/'+encodeURIComponent(cur)+'?number='+encodeURIComponent(raw));
+    const c=esc(r.pairingCode||'');
+    if(!c){toast('Não foi possível gerar o código','err');return;}
+    const b=$('#qrBox'); if(b)b.innerHTML=`<div class="paircode">${c}</div><small>No WhatsApp do número <b>+${esc(raw)}</b>: Aparelhos conectados → Conectar → <b>Conectar com número de telefone</b> → digite o código acima.</small>`;
+    watchUntilOpen(encodeURIComponent(cur));
+  }catch(e){toast(e.message,'err');}
+};
+// Observa a conexão SEM re-pedir o código (cada request gera um código novo).
+function watchUntilOpen(I){
+  stopQR();
+  qrTimer=setInterval(async()=>{
+    try{const s=(await api('/instance/connectionState/'+I)).instance.state;
+      if(s==='open'){closePairModal();toast('Conectado!','ok');loadTab();}
+    }catch(e){}
+  },3000);
+}
 function closePairModal(){$('#pairModal').classList.remove('show');stopQR();}
 $('#closePair').onclick=closePairModal;
 $('#pairModal').onclick=e=>{if(e.target===$('#pairModal'))closePairModal();};

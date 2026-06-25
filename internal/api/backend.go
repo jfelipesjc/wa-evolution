@@ -31,6 +31,10 @@ type Backend interface {
 	// PairingCode returns the latest pairing code captured for an instance (empty
 	// if the instance pairs by QR / none yet). Populated for number-paired instances.
 	PairingCode(name string) string
+	// RequestPairingCode asks WhatsApp for an 8-char pairing code for the given
+	// phone number on the instance's live (QR) pairing session, returning the code
+	// to type on the phone. Errors if the instance has no active pairing session.
+	RequestPairingCode(ctx context.Context, name, number string) (string, error)
 	// Delete removes an instance (stops + closes its store).
 	Delete(name string) error
 	// Logout disconnects an instance without deleting its store.
@@ -328,6 +332,38 @@ func (b *ManagerBackend) PairingCode(name string) string {
 	return ""
 }
 
+// RequestPairingCode requests an 8-char pairing code for number on the instance's
+// live pairing session. It retries briefly while the session establishes (the
+// companion handshake must be active before a code can be requested).
+func (b *ManagerBackend) RequestPairingCode(ctx context.Context, name, number string) (string, error) {
+	number = sanitizeNumber(number)
+	if number == "" {
+		return "", errors.New("number is required")
+	}
+	deadline := time.Now().Add(12 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		c, err := b.liveClient(name)
+		if err != nil {
+			lastErr = err
+		} else if code, cerr := c.RequestPairingCode(ctx, number); cerr == nil {
+			b.SetPairingCode(name, code)
+			return code, nil
+		} else {
+			lastErr = cerr
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(400 * time.Millisecond):
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("pairing session not ready")
+	}
+	return "", lastErr
+}
+
 // PairingNumber returns the number an instance pairs by code with ("" = QR).
 func (b *ManagerBackend) PairingNumber(name string) string {
 	if in, ok := b.get(name); ok {
@@ -409,14 +445,11 @@ func (b *ManagerBackend) createInternal(name, number string) error {
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
-	// number set -> pair via 8-char pairing code for that phone; else QR.
-	var mc *wa.ManagedClient
+	// Always connect in QR mode (active pairing session). The pairing CODE is then
+	// requested on demand for a user-supplied number via RequestPairingCode (the
+	// number passed at create time is kept only as a default/hint for the UI).
 	number = sanitizeNumber(number)
-	if number != "" {
-		mc, err = b.mgr.AddPaired(name, st, number)
-	} else {
-		mc, err = b.mgr.Add(name, st)
-	}
+	mc, err := b.mgr.Add(name, st)
 	if err != nil {
 		_ = st.Close()
 		return err

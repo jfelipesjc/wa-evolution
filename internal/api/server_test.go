@@ -36,9 +36,10 @@ type fakeBackend struct {
 	qr               string
 	pairingCode      string
 	lastCreateNumber string
-	ownNumber        string
-	ownName          string
-	connErr          error
+	ownNumber         string
+	ownName           string
+	lastReqPairNumber string
+	connErr           error
 	texts    []sentText
 	medias   []sentMedia
 	messages map[string][]StoredMsg // jid -> stored
@@ -176,6 +177,16 @@ func (f *fakeBackend) PairingNumber(name string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.lastCreateNumber
+}
+
+func (f *fakeBackend) RequestPairingCode(ctx context.Context, name, number string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastReqPairNumber = number
+	if f.pairingCode == "" {
+		return "ABCD-1234", nil
+	}
+	return f.pairingCode, nil
 }
 
 func (f *fakeBackend) Connect(ctx context.Context, name string) (string, error) {

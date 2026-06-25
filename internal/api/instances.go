@@ -45,6 +45,17 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusNotFound, "instance not found")
 		return
 	}
+	// ?number=<phone> -> request an 8-char pairing CODE for that number (Evolution
+	// behaviour). The number is supplied/confirmed by the user at connect time.
+	if num := r.URL.Query().Get("number"); num != "" {
+		pc, err := s.backend.RequestPairingCode(r.Context(), name, num)
+		if err != nil {
+			s.writeSendError(w, err)
+			return
+		}
+		s.writeJSON(w, http.StatusOK, connectResp{PairingCode: pc, Instance: name, ConnStatus: s.backend.Status()[name]})
+		return
+	}
 	code, err := s.backend.Connect(r.Context(), name)
 	if err != nil {
 		if errors.Is(err, ErrInstanceNotFound) {
