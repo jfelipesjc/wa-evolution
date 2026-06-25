@@ -201,7 +201,7 @@ func TestCreateTextMessage(t *testing.T) {
 	srv := httptest.NewServer(mock.handler())
 	defer srv.Close()
 	cw := newChatwootClient(chatwootConfig{URL: srv.URL, AccountID: "1", Token: "t"})
-	id, err := cw.CreateTextMessage(context.Background(), 300, "hi", "incoming", "WAID:abc")
+	id, err := cw.CreateTextMessage(context.Background(), 300, "hi", "incoming", "WAID:abc", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

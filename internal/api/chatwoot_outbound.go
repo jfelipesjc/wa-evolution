@@ -221,13 +221,43 @@ func (s *Server) chatwootProcessWebhook(ctx context.Context, instance string, cf
 		if formatText == "" {
 			continue
 		}
-		if _, err := s.backend.SendText(ctx, instance, jid, formatText); err != nil {
-			s.logger.Printf("chatwoot webhook %s: send text: %v", instance, err)
-			s.chatwootPostError(ctx, cw, body.Conversation.ID, err)
+		// Quoted reply: if the agent replied to a message we have a WA mapping for,
+		// send a WhatsApp quote so the citation renders on WhatsApp.
+		var (
+			waID    string
+			sendErr error
+		)
+		if body.ContentAttributes.InReplyTo != 0 {
+			if ref, ok := s.chatwootMsgs.waRefForChatwootID(instance, body.ContentAttributes.InReplyTo); ok {
+				waID, sendErr = s.backend.SendTextReply(ctx, instance, jid, formatText, QuotedRef{
+					ID:          ref.WAID,
+					RemoteJID:   ref.RemoteJID,
+					FromMe:      ref.FromMe,
+					Text:        ref.Text,
+					Participant: ref.Participant,
+				})
+			} else {
+				waID, sendErr = s.backend.SendText(ctx, instance, jid, formatText)
+			}
+		} else {
+			waID, sendErr = s.backend.SendText(ctx, instance, jid, formatText)
 		}
+		if sendErr != nil {
+			s.logger.Printf("chatwoot webhook %s: send text: %v", instance, sendErr)
+			s.chatwootPostError(ctx, cw, body.Conversation.ID, sendErr)
+			continue
+		}
+		// Record this agent reply's WA<->Chatwoot id mapping so a future reply to it
+		// resolves back to this WhatsApp message.
+		s.chatwootMsgs.record(instance, body.ID, waMsgRef{
+			WAID:      waID,
+			RemoteJID: jid,
+			FromMe:    true,
+			Text:      formatText,
+		})
 	}
-	// NOTE: local DB id-mapping (updateChatwootMessageId) and markMessageAsRead are
-	// skipped — we have no Message store yet.
+	// NOTE: local DB id-mapping for media replies and markMessageAsRead are skipped
+	// — media replies don't carry a quote in this phase.
 }
 
 // chatwootSendAttachment downloads an attachment and forwards it to WhatsApp,

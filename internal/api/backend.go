@@ -53,6 +53,9 @@ type Backend interface {
 
 	// SendText sends a text message; returns the message id.
 	SendText(ctx context.Context, name, jid, text string) (string, error)
+	// SendTextReply sends a text quoting an earlier message (q identifies it);
+	// returns the message id.
+	SendTextReply(ctx context.Context, name, jid, text string, q QuotedRef) (string, error)
 	// SendMedia sends an image/video/audio/document; returns the message id.
 	SendMedia(ctx context.Context, name, jid string, m MediaArg) (string, error)
 	// SendReaction reacts to a target message; returns the reaction message id.
@@ -563,6 +566,24 @@ func (b *ManagerBackend) Status() map[string]string {
 // SendText sends a text message through the ManagedClient's live-session handle
 // (the lightweight path that does not need the full *wa.Client). The richer
 // media/reaction/usync/group methods fetch the live *wa.Client via liveClient.
+// QuotedRef identifies a WhatsApp message to quote in a reply.
+type QuotedRef struct {
+	ID          string
+	RemoteJID   string
+	FromMe      bool
+	Text        string
+	Participant string
+}
+
+// SendTextReply sends a text reply quoting an earlier message.
+func (b *ManagerBackend) SendTextReply(ctx context.Context, name, jid, text string, q QuotedRef) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.SendTextReplyTo(ctx, jid, text, q.ID, q.RemoteJID, q.FromMe, q.Text, q.Participant)
+}
+
 func (b *ManagerBackend) SendText(ctx context.Context, name, jid, text string) (string, error) {
 	in, ok := b.get(name)
 	if !ok {

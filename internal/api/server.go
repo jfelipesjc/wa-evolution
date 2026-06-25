@@ -47,6 +47,9 @@ type Server struct {
 	// chatwootCache caches resolved Chatwoot contact/conversation ids per
 	// (instance,jid) for the inbound bridge (see chatwoot_inbound.go).
 	chatwootCache *chatwootInboundCache
+	// chatwootMsgs maps WhatsApp<->Chatwoot message ids for quoted/reply linkage
+	// (see chatwoot_msgstore.go).
+	chatwootMsgs *chatwootMsgStore
 
 	logger *log.Logger
 }
@@ -79,6 +82,7 @@ func New(opts Options) *Server {
 		cfg:        newConfigStore(),
 		chatwoot:      newChatwootStore(),
 		chatwootCache: newChatwootInboundCache(),
+		chatwootMsgs:  newChatwootMsgStore(),
 		logger:        logger,
 	}
 	s.dispatcher.setDir(opts.WebhookDir)

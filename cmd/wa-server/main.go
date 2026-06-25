@@ -85,6 +85,9 @@ func run(addr, apikey, dir string) error {
 				JID: mev.From, MsgID: mev.ID, PushName: mev.PushName, Text: text,
 				IsMedia: mev.Media != nil,
 			}
+			if mev.Quoted != nil {
+				im.QuotedWAID = mev.Quoted.StanzaID // reply linkage (in_reply_to)
+			}
 			if mev.Media != nil {
 				im.Mimetype = mev.Media.Mimetype
 				im.FileName = mev.Media.FileName

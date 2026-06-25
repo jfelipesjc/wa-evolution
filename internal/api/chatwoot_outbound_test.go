@@ -240,3 +240,33 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+func TestChatwootWebhook_QuotedReply(t *testing.T) {
+	srv, fb := newOutboundServer(t)
+	h := srv.Handler()
+
+	// Pre-seed the store: chatwoot message id 555 maps to WA message WAREF.
+	srv.chatwootMsgs.record("bot1", 555, waMsgRef{
+		WAID:      "WAREF",
+		RemoteJID: "5512981201631@s.whatsapp.net",
+		FromMe:    false,
+		Text:      "original",
+	})
+
+	body := agentReply("5512981201631", "replying now", "")
+	body["content_attributes"] = map[string]any{"in_reply_to": 555}
+	do(t, h, "POST", "/chatwoot/webhook/bot1", "", body)
+
+	fb.mu.Lock()
+	defer fb.mu.Unlock()
+	// SendTextReply was used (lastQuoted carries the stored WAID).
+	if fb.lastQuoted.ID != "WAREF" {
+		t.Fatalf("lastQuoted.ID = %q, want WAREF (SendTextReply not used)", fb.lastQuoted.ID)
+	}
+	if len(fb.texts) != 1 || fb.texts[0].text != "replying now" {
+		t.Fatalf("reply text wrong: %#v", fb.texts)
+	}
+	if fb.texts[0].jid != "5512981201631@s.whatsapp.net" {
+		t.Fatalf("reply jid = %q", fb.texts[0].jid)
+	}
+}

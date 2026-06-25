@@ -391,3 +391,42 @@ func TestChatwootHandleInbound_ReuseExistingConversation(t *testing.T) {
 		t.Fatalf("message not posted to reused conversation")
 	}
 }
+
+func TestChatwootHandleInbound_QuotedReplyLinkage(t *testing.T) {
+	mock := newFullMock()
+	mock.inboxes = []cwInbox{{ID: 50, Name: "bot1"}}
+	srv, _ := newInboundServer(t, mock, chatwootConfig{
+		Enabled: true, AccountID: "1", Token: "tok", NameInbox: "bot1",
+		MergeBrazilContacts: true, IgnoreJids: []string{"@g.us"},
+	})
+	ctx := context.Background()
+	jid := "5512981201631@s.whatsapp.net"
+
+	// First message: bridged, records WAID(WA1) -> chatwoot id 900 (mock.nextMsg).
+	srv.chatwootHandleInbound(ctx, "bot1", InboundMessage{
+		JID: jid, MsgID: "WA1", Text: "first",
+	})
+	if len(mock.messages) != 1 {
+		t.Fatalf("first message not created: %d", len(mock.messages))
+	}
+	firstCwID, ok := srv.chatwootMsgs.chatwootIDForWA("bot1", "WA1")
+	if !ok || firstCwID == 0 {
+		t.Fatalf("first message not recorded in msg store: id=%d ok=%v", firstCwID, ok)
+	}
+
+	// Second message quotes the first -> create payload must carry in_reply_to.
+	srv.chatwootHandleInbound(ctx, "bot1", InboundMessage{
+		JID: jid, MsgID: "WA2", Text: "reply to first", QuotedWAID: "WA1",
+	})
+	if len(mock.messages) != 2 {
+		t.Fatalf("second message not created: %d", len(mock.messages))
+	}
+	ca, ok := mock.messages[1]["content_attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("content_attributes missing/wrong type: %#v", mock.messages[1])
+	}
+	// JSON numbers decode to float64.
+	if int(ca["in_reply_to"].(float64)) != firstCwID {
+		t.Fatalf("in_reply_to = %v, want %d", ca["in_reply_to"], firstCwID)
+	}
+}

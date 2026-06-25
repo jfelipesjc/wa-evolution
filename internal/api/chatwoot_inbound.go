@@ -81,13 +81,18 @@ func (cw *chatwootClient) CreateConversation(ctx context.Context, contactID, inb
 	return resp.ID, nil
 }
 
-// CreateTextMessage posts a JSON text message and returns its Chatwoot id.
-func (cw *chatwootClient) CreateTextMessage(ctx context.Context, convID int, content, messageType, sourceID string) (int, error) {
+// CreateTextMessage posts a JSON text message and returns its Chatwoot id. When
+// inReplyTo != 0 it sets content_attributes.in_reply_to to thread the message as a
+// reply to that Chatwoot message id.
+func (cw *chatwootClient) CreateTextMessage(ctx context.Context, convID int, content, messageType, sourceID string, inReplyTo int) (int, error) {
 	body := map[string]any{
 		"content":      content,
 		"message_type": messageType,
 		"private":      false,
 		"source_id":    sourceID,
+	}
+	if inReplyTo != 0 {
+		body["content_attributes"] = map[string]any{"in_reply_to": inReplyTo}
 	}
 	var resp struct {
 		ID int `json:"id"`
@@ -100,8 +105,10 @@ func (cw *chatwootClient) CreateTextMessage(ctx context.Context, convID int, con
 }
 
 // CreateMediaMessage posts a multipart message with one attachment and returns
-// its Chatwoot id. content is optional (sent only when non-empty).
-func (cw *chatwootClient) CreateMediaMessage(ctx context.Context, convID int, content, messageType, sourceID, fileName string, data []byte) (int, error) {
+// its Chatwoot id. content is optional (sent only when non-empty). When
+// inReplyTo != 0 it sets the content_attributes form field to thread the message
+// as a reply to that Chatwoot message id.
+func (cw *chatwootClient) CreateMediaMessage(ctx context.Context, convID int, content, messageType, sourceID, fileName string, data []byte, inReplyTo int) (int, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	if content != "" {
@@ -110,6 +117,9 @@ func (cw *chatwootClient) CreateMediaMessage(ctx context.Context, convID int, co
 	_ = mw.WriteField("message_type", messageType)
 	if sourceID != "" {
 		_ = mw.WriteField("source_id", sourceID)
+	}
+	if inReplyTo != 0 {
+		_ = mw.WriteField("content_attributes", fmt.Sprintf(`{"in_reply_to":%d}`, inReplyTo))
 	}
 	fw, err := mw.CreateFormFile("attachments[]", fileName)
 	if err != nil {
@@ -159,6 +169,8 @@ type InboundMessage struct {
 	Mimetype string
 	FileName string
 	Download func() ([]byte, string, error) // lazy media fetch -> (bytes, mimetype); may be nil
+	// QuotedWAID is the WA stanza id of the message this one quotes ("" if none).
+	QuotedWAID string
 }
 
 // chatwootInboundCache caches resolved contact/conversation ids per (instance,jid)
@@ -275,6 +287,16 @@ func (s *Server) chatwootHandleInbound(ctx context.Context, instance string, m I
 	}
 	sourceID := "WAID:" + m.MsgID
 
+	// Quoted/reply linkage: if this WA message quotes an earlier one we already
+	// bridged, thread the Chatwoot message under it via in_reply_to.
+	var inReplyTo int
+	if m.QuotedWAID != "" {
+		if id, ok := s.chatwootMsgs.chatwootIDForWA(instance, m.QuotedWAID); ok {
+			inReplyTo = id
+		}
+	}
+
+	var chatwootID int
 	if m.IsMedia && m.Download != nil {
 		data, mime, derr := m.Download()
 		if derr != nil {
@@ -285,19 +307,32 @@ func (s *Server) chatwootHandleInbound(ctx context.Context, instance string, m I
 		if fileName == "" {
 			fileName = mediaFileName(mime)
 		}
-		if _, err := cw.CreateMediaMessage(ctx, convID, m.Text, messageType, sourceID, fileName, data); err != nil {
+		id, err := cw.CreateMediaMessage(ctx, convID, m.Text, messageType, sourceID, fileName, data, inReplyTo)
+		if err != nil {
 			s.logger.Printf("chatwoot inbound %s: create media message: %v", instance, err)
+			return
 		}
+		chatwootID = id
+	} else if m.Text != "" {
+		id, err := cw.CreateTextMessage(ctx, convID, m.Text, messageType, sourceID, inReplyTo)
+		if err != nil {
+			s.logger.Printf("chatwoot inbound %s: create text message: %v", instance, err)
+			return
+		}
+		chatwootID = id
+	} else {
 		return
 	}
 
-	if m.Text != "" {
-		if _, err := cw.CreateTextMessage(ctx, convID, m.Text, messageType, sourceID); err != nil {
-			s.logger.Printf("chatwoot inbound %s: create text message: %v", instance, err)
-		}
-	}
-	// TODO(phase 4): reactions, interactive (PIX) buttons, CTWA ads, reply/quote
-	// linkage (source_reply_id / content_attributes), and WAID->Chatwoot id store.
+	// Record the WA<->Chatwoot id mapping so this message can be quoted later
+	// (from either direction).
+	s.chatwootMsgs.record(instance, chatwootID, waMsgRef{
+		WAID:      m.MsgID,
+		RemoteJID: m.JID,
+		FromMe:    m.FromMe,
+		Text:      m.Text,
+	})
+	// TODO(phase 4+): reactions, interactive (PIX) buttons, CTWA ads.
 }
 
 // resolveContact finds-or-creates the Chatwoot contact for an inbound message,

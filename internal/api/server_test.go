@@ -39,6 +39,7 @@ type fakeBackend struct {
 	ownNumber         string
 	ownName           string
 	lastReqPairNumber string
+	lastQuoted        QuotedRef
 	connErr           error
 	texts    []sentText
 	medias   []sentMedia
@@ -235,6 +236,14 @@ func (f *fakeBackend) SendText(ctx context.Context, name, jid, text string) (str
 	defer f.mu.Unlock()
 	f.texts = append(f.texts, sentText{name, jid, text})
 	return "MSGID-TEXT", nil
+}
+
+func (f *fakeBackend) SendTextReply(ctx context.Context, name, jid, text string, q QuotedRef) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.texts = append(f.texts, sentText{name, jid, text})
+	f.lastQuoted = q
+	return "MSGID-REPLY", nil
 }
 
 func (f *fakeBackend) SendMedia(ctx context.Context, name, jid string, m MediaArg) (string, error) {
