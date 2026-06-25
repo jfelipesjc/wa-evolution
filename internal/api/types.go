@@ -16,10 +16,13 @@ type createInstanceReq struct {
 	Number       string `json:"number,omitempty"`
 }
 
-// instanceInfo is the per-instance descriptor returned by create/fetch.
+// instanceInfo is the per-instance descriptor returned by create/fetch. OwnerJid
+// and ProfileName mirror Evolution and carry the paired account's number + name.
 type instanceInfo struct {
 	InstanceName     string `json:"instanceName"`
 	ConnectionStatus string `json:"connectionStatus"`
+	OwnerJid         string `json:"ownerJid,omitempty"`
+	ProfileName      string `json:"profileName,omitempty"`
 }
 
 // createInstanceResp is the body of POST /instance/create.

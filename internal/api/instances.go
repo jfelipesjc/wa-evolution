@@ -90,7 +90,12 @@ func (s *Server) handleFetchInstances(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(names)
 	out := make([]instanceInfo, 0, len(names))
 	for _, name := range names {
-		out = append(out, instanceInfo{InstanceName: name, ConnectionStatus: status[name]})
+		number, pushName := s.backend.OwnProfile(name)
+		info := instanceInfo{InstanceName: name, ConnectionStatus: status[name], ProfileName: pushName}
+		if number != "" {
+			info.OwnerJid = number + "@s.whatsapp.net"
+		}
+		out = append(out, info)
 	}
 	s.writeJSON(w, http.StatusOK, out)
 }

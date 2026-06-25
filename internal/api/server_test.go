@@ -36,6 +36,8 @@ type fakeBackend struct {
 	qr               string
 	pairingCode      string
 	lastCreateNumber string
+	ownNumber        string
+	ownName          string
 	connErr          error
 	texts    []sentText
 	medias   []sentMedia
@@ -162,6 +164,12 @@ func (f *fakeBackend) PairingCode(name string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.pairingCode
+}
+
+func (f *fakeBackend) OwnProfile(name string) (string, string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.ownNumber, f.ownName
 }
 
 func (f *fakeBackend) Connect(ctx context.Context, name string) (string, error) {

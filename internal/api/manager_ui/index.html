@@ -268,11 +268,14 @@
   @keyframes spin{to{transform:rotate(360deg)}}
 
   /* ---------- QR (kept white to scan, luxuriously framed) ---------- */
-  .qr{display:flex;flex-direction:column;align-items:center;gap:11px;padding:18px;background:#fff;border-radius:var(--radius);width:fit-content;max-width:100%;margin:6px 0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06),0 0 0 1px var(--accent-soft),0 18px 50px -18px rgba(0,0,0,.7),0 0 40px -20px var(--accent-glow);border:1px solid color-mix(in srgb,var(--accent) 30%,#fff)}
-  .qr img{width:232px;height:232px;max-width:62vw;image-rendering:pixelated;border-radius:8px}
-  .qr small{color:#3a3f47;font-weight:600;letter-spacing:.02em}
-  .qr .ph{width:232px;height:232px;max-width:62vw;display:grid;place-items:center;color:#9aa0a6;gap:10px}
-  .qr .paircode{font:800 34px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.22em;color:#0d1117;padding:18px 14px 12px;text-align:center;word-break:break-all}
+  .qr{display:flex;flex-direction:column;align-items:center;gap:13px;padding:18px;background:var(--panel);border-radius:var(--radius);width:fit-content;max-width:100%;margin:6px 0;box-shadow:var(--shadow),0 0 50px -22px var(--accent-glow);border:1px solid var(--border);position:relative;overflow:hidden}
+  .qr::before{content:"";position:absolute;inset:0;background:linear-gradient(160deg,var(--accent-soft),transparent 60%);opacity:.5;pointer-events:none}
+  /* QR image keeps a small white quiet-zone tile so it stays scannable, framed by the dark glass */
+  .qr img{width:228px;height:228px;max-width:60vw;image-rendering:pixelated;border-radius:10px;background:#fff;padding:12px;position:relative}
+  .qr small{color:var(--muted);font-weight:600;letter-spacing:.01em;max-width:300px;text-align:center;position:relative}
+  .qr small b{color:var(--text)}
+  .qr .ph{width:228px;height:228px;max-width:60vw;display:grid;place-items:center;color:var(--muted);gap:10px;position:relative}
+  .qr .paircode{font:800 36px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.2em;color:var(--accent);padding:20px 16px 10px;text-align:center;word-break:break-all;text-shadow:0 0 28px var(--accent-glow);position:relative}
 
   .muted{color:var(--muted)}
   label{font-size:11.5px;color:var(--muted);display:block;margin-bottom:7px;font-weight:500;letter-spacing:.02em}
@@ -495,6 +498,7 @@ let BASE = localStorage.getItem('wae_base') || '';
 let KEY  = localStorage.getItem('wae_key')  || '';
 let listTimer=null, qrTimer=null;
 let cur=null, curTab='overview';
+let INSTMAP={};
 
 /* ---------- drawer ---------- */
 function closeDrawer(){$('#app').classList.remove('drawer-open');}
@@ -614,9 +618,11 @@ async function refreshList(){
     $('#empty').classList.toggle('hide',arr.length>0);
     arr.sort((a,b)=>(a.instanceName||'').localeCompare(b.instanceName||''));
     // stat cards from real data: total + connected count
-    let openCount=0;
+    let openCount=0; INSTMAP={};
     arr.forEach((it,i)=>{
       const name=it.instanceName||it.name; const st=it.connectionStatus||it.state||'close';
+      INSTMAP[name]=it;
+      const num=(it.ownerJid||'').split(/[:@]/)[0];
       const k=sc(st); if(k==='open')openCount++;
       const stCls=k==='open'?'st-on':(k==='connecting'?'st-warn':'st-off');
       const stLbl=k==='open'?'Conectado':(k==='connecting'?'Conectando':'Desconectado');
@@ -628,7 +634,7 @@ async function refreshList(){
           <span class="status ${stCls}"><span class="sdot"></span> ${stLbl}</span>
         </div>
         <div class="iname">${esc(name)}</div>
-        <div class="istatus">${STL[st]||esc(st)}</div>
+        <div class="istatus">${num?('+'+esc(num)):(STL[st]||esc(st))}</div>
         <div class="go">Gerenciar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>`;
       c.onclick=()=>openInstance(name);
       c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openInstance(name);}};
@@ -679,11 +685,14 @@ async function tabOverview(I){
   const nd=$('#navDot'); if(nd){nd.className='dot '+sc(st);}
   $('#dStatusPill').innerHTML=pill(st);
   if(st==='open'){
+    const it=INSTMAP[cur]||{}; const num=(it.ownerJid||'').split(/[:@]/)[0]; const pn=it.profileName||'';
     body(`<div class="card">
       <div class="kv"><b>Status</b><span>${pill(st)}</span></div>
+      <div class="kv"><b>Número</b><span class="mono">${num?('+'+esc(num)):'—'}</span></div>
+      <div class="kv"><b>Nome atual</b><span>${pn?esc(pn):'—'}</span></div>
       <hr class="divider">
       <div class="section-title">Perfil</div>
-      <div class="field"><label>Nome do perfil</label><input id="pName" placeholder="novo nome"><button class="sm" style="margin-top:8px" onclick="setProfileName()">Salvar nome</button></div>
+      <div class="field"><label>Nome do perfil</label><input id="pName" value="${esc(pn)}" placeholder="nome do perfil"><button class="sm" style="margin-top:8px" onclick="setProfileName()">Salvar nome</button></div>
       <div class="field"><label>Status (recado)</label><input id="pStatus" placeholder="novo recado"><button class="sm" style="margin-top:8px" onclick="setProfileStatus()">Salvar recado</button></div>
       <hr class="divider">
       <div class="section-title">Sessão</div>
@@ -721,7 +730,7 @@ async function pollQR(I){
   };
   await tick(); stopQR(); qrTimer=setInterval(tick,3000);
 }
-window.setProfileName=async()=>{try{await api('/chat/updateProfileName/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify({name:$('#pName').value})});toast('Nome salvo','ok');}catch(e){toast(e.message,'err');}}
+window.setProfileName=async()=>{try{await api('/chat/updateProfileName/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify({name:$('#pName').value})});toast('Nome salvo','ok');await refreshList().catch(()=>{});loadTab();}catch(e){toast(e.message,'err');}}
 window.setProfileStatus=async()=>{try{await api('/chat/updateProfileStatus/'+encodeURIComponent(cur),{method:'POST',body:JSON.stringify({status:$('#pStatus').value})});toast('Recado salvo','ok');}catch(e){toast(e.message,'err');}}
 window.instAction=async(act,m)=>{try{await api('/instance/'+act+'/'+encodeURIComponent(cur),{method:m});toast('OK','ok');loadTab();}catch(e){toast(e.message,'err');}}
 window.delInstance=async()=>{if(!confirm('Excluir a instância "'+cur+'"? Apaga a sessão.'))return;try{await api('/instance/delete/'+encodeURIComponent(cur),{method:'DELETE'});toast('Excluída','ok');showList();}catch(e){toast(e.message,'err');}}

@@ -39,6 +39,9 @@ type Backend interface {
 	Status() map[string]string
 	// Exists reports whether the named instance is registered.
 	Exists(name string) bool
+	// OwnProfile returns the instance's own account number (digits) and display
+	// name (pushName) from its stored creds. Empty strings if not paired yet.
+	OwnProfile(name string) (number, pushName string)
 
 	// SendText sends a text message; returns the message id.
 	SendText(ctx context.Context, name, jid, text string) (string, error)
@@ -330,6 +333,24 @@ func (b *ManagerBackend) get(name string) (*mbInstance, bool) {
 func (b *ManagerBackend) Exists(name string) bool {
 	_, ok := b.get(name)
 	return ok
+}
+
+// OwnProfile reads the instance's own number + display name from its stored creds.
+func (b *ManagerBackend) OwnProfile(name string) (number, pushName string) {
+	in, ok := b.get(name)
+	if !ok {
+		return "", ""
+	}
+	creds, ok, err := in.store.LoadCreds()
+	if err != nil || !ok || creds == nil {
+		return "", ""
+	}
+	// creds.Me is a JID like "5512999999999:3@s.whatsapp.net" or with @s.whatsapp.net.
+	number = creds.Me
+	if i := strings.IndexAny(number, ":@"); i >= 0 {
+		number = number[:i]
+	}
+	return number, creds.PushName
 }
 
 // chatStore returns the ChatStore for an instance (used by the webhook pump to
