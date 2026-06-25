@@ -332,25 +332,28 @@ func (b *ManagerBackend) PairingCode(name string) string {
 	return ""
 }
 
-// RequestPairingCode requests an 8-char pairing code for number on the instance's
-// live pairing session. It retries briefly while the session establishes (the
-// companion handshake must be active before a code can be requested).
+// RequestPairingCode switches the instance into pairing-CODE mode for the given
+// number (reconnecting via ConnectWithPairingCode, the proven path) and waits for
+// the emitted 8-char code to be captured. The number is supplied/confirmed by the
+// user at connect time.
 func (b *ManagerBackend) RequestPairingCode(ctx context.Context, name, number string) (string, error) {
 	number = sanitizeNumber(number)
 	if number == "" {
 		return "", errors.New("number is required")
 	}
-	deadline := time.Now().Add(12 * time.Second)
-	var lastErr error
+	if !b.Exists(name) {
+		return "", ErrInstanceNotFound
+	}
+	b.SetPairingCode(name, "") // drop any stale code before reconnecting
+	if err := b.mgr.SetPairingNumber(name, number); err != nil {
+		return "", err
+	}
+	// ConnectWithPairingCode emits a PairingCodeEvent which the event pump captures
+	// into pairCode; poll for it.
+	deadline := time.Now().Add(25 * time.Second)
 	for time.Now().Before(deadline) {
-		c, err := b.liveClient(name)
-		if err != nil {
-			lastErr = err
-		} else if code, cerr := c.RequestPairingCode(ctx, number); cerr == nil {
-			b.SetPairingCode(name, code)
+		if code := b.PairingCode(name); code != "" {
 			return code, nil
-		} else {
-			lastErr = cerr
 		}
 		select {
 		case <-ctx.Done():
@@ -358,10 +361,7 @@ func (b *ManagerBackend) RequestPairingCode(ctx context.Context, name, number st
 		case <-time.After(400 * time.Millisecond):
 		}
 	}
-	if lastErr == nil {
-		lastErr = errors.New("pairing session not ready")
-	}
-	return "", lastErr
+	return "", errors.New("timed out waiting for pairing code")
 }
 
 // PairingNumber returns the number an instance pairs by code with ("" = QR).
@@ -477,6 +477,9 @@ func (b *ManagerBackend) Connect(ctx context.Context, name string) (string, erro
 	if !ok {
 		return "", ErrInstanceNotFound
 	}
+	// Ensure QR mode (no-op unless the instance was switched to code mode by a
+	// prior pairing-code request) so /connect yields a QR.
+	_ = b.mgr.SetPairingNumber(name, "")
 	// The manager auto-starts instances on Add when already Started, so the QR is
 	// produced asynchronously and captured by the event pump into in.qr. Poll
 	// briefly for it (bounded) so the HTTP response carries the first QR.
