@@ -65,16 +65,9 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Number-paired instances surface an 8-char pairing code instead of a QR. If
-	// one is present, return it (Evolution clients read `pairingCode`).
-	if pc := s.backend.PairingCode(name); pc != "" {
-		s.writeJSON(w, http.StatusOK, connectResp{
-			PairingCode: pc,
-			Instance:    name,
-			ConnStatus:  s.backend.Status()[name],
-		})
-		return
-	}
+	// The QR path (no ?number=) always returns a QR. Pairing codes are returned
+	// only by the explicit ?number=<phone> path (handled above), so a stale cached
+	// code never leaks into a QR request.
 	b64, dataURI := qrPNGBase64(code)
 	// Evolution clients use `code` as the scannable string and `base64` as the
 	// renderable data URI. We expose the raw base64 PNG via `code` when a QR is

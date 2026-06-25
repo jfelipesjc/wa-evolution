@@ -478,8 +478,10 @@ func (b *ManagerBackend) Connect(ctx context.Context, name string) (string, erro
 		return "", ErrInstanceNotFound
 	}
 	// Ensure QR mode (no-op unless the instance was switched to code mode by a
-	// prior pairing-code request) so /connect yields a QR.
+	// prior pairing-code request) so /connect yields a QR, and drop any cached
+	// pairing code so it can't be mistaken for a QR response.
 	_ = b.mgr.SetPairingNumber(name, "")
+	b.SetPairingCode(name, "")
 	// The manager auto-starts instances on Add when already Started, so the QR is
 	// produced asynchronously and captured by the event pump into in.qr. Poll
 	// briefly for it (bounded) so the HTTP response carries the first QR.
