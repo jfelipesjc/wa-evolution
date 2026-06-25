@@ -41,6 +41,10 @@ type Server struct {
 	// returns them on find (it does not yet act on rejectCall/alwaysOnline/proxy).
 	cfg *configStore
 
+	// chatwoot holds per-instance Chatwoot integration config (persisted) and is
+	// the seam for the WhatsApp<->Chatwoot bridge (see chatwoot.go).
+	chatwoot *chatwootStore
+
 	logger *log.Logger
 }
 
@@ -70,9 +74,11 @@ func New(opts Options) *Server {
 		mux:        http.NewServeMux(),
 		dispatcher: newWebhookDispatcher(opts.HTTPClient, logger),
 		cfg:        newConfigStore(),
+		chatwoot:   newChatwootStore(),
 		logger:     logger,
 	}
 	s.dispatcher.setDir(opts.WebhookDir)
+	s.chatwoot.setDir(opts.WebhookDir)
 	s.routes()
 	return s
 }
@@ -192,6 +198,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /proxy/set/{instance}", s.handleSetProxy)
 	s.mux.HandleFunc("GET /proxy/find/{instance}", s.handleFindProxy)
 
+	// chatwoot integration
+	s.mux.HandleFunc("POST /chatwoot/set/{instance}", s.handleChatwootSet)
+	s.mux.HandleFunc("GET /chatwoot/find/{instance}", s.handleChatwootFind)
+	s.mux.HandleFunc("POST /chatwoot/webhook/{instance}", s.handleChatwootWebhook)
+
 	// Manager UI (static single-page dashboard, exempt from apikey auth).
 	s.mux.HandleFunc("GET /manager", s.handleManager)
 	s.mux.HandleFunc("GET /manager/", s.handleManager)
@@ -205,6 +216,12 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		// The /manager UI (static HTML/JS served from the binary) is public; the
 		// API calls it issues from the browser carry the apikey the operator pastes.
 		if r.URL.Path == "/manager" || strings.HasPrefix(r.URL.Path, "/manager/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Chatwoot posts agent replies to /chatwoot/webhook/{instance} without our
+		// apikey (it's the inbox's configured webhook); leave it unauthenticated.
+		if strings.HasPrefix(r.URL.Path, "/chatwoot/webhook/") {
 			next.ServeHTTP(w, r)
 			return
 		}
