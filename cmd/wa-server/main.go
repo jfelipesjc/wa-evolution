@@ -82,6 +82,10 @@ func run(addr, apikey, dir string) error {
 		// stream:error reason) so session drops are diagnosable from the log.
 		switch e := ev.(type) {
 		case wa.LoggedInEvent:
+			// Clear any cached QR / pairing code so a reconnect never serves a
+			// stale (now-invalid) code/QR from /instance/connect.
+			backend.SetQR(instance, "")
+			backend.SetPairingCode(instance, "")
 			fmt.Fprintf(os.Stderr, "[evt] %s LOGGED IN\n", instance)
 		case wa.DisconnectedEvent:
 			fmt.Fprintf(os.Stderr, "[evt] %s DISCONNECTED: %s\n", instance, e.Reason)

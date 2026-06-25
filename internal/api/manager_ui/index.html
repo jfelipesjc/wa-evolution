@@ -438,6 +438,17 @@
 </div>
 
 <!-- nova instância modal -->
+<div class="modal-bg" id="pairModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pmTitle">
+    <div class="modal-head">
+      <h3 id="pmTitle">Conectar</h3>
+      <button class="x-btn" id="closePair" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;align-items:center;gap:6px">
+      <div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>gerando…</small></div></div>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="createModal">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cmTitle">
     <div class="modal-head">
@@ -779,7 +790,6 @@ async function tabOverview(I){
       </div>
     </div>
     ${banner}
-    <div id="qrSlot"></div>
     <div class="card">
       <div class="section-title">Ações da sessão</div>
       <div class="row">
@@ -808,17 +818,21 @@ async function tabOverview(I){
 
   // NÃO gera QR/código automaticamente — só após o usuário clicar num botão.
 }
-// startPair só é disparado por clique. mode: 'qr' | 'code'.
+// startPair só é disparado por clique. mode: 'qr' | 'code'. Abre num MODAL.
 window.startPair=(mode)=>{
-  const slot=$('#qrSlot'); if(!slot)return;
+  $('#pmTitle').textContent = mode==='code' ? 'Código de pareamento' : 'Conectar via QR Code';
   const lbl=mode==='code'?'gerando código…':'gerando QR…';
-  slot.innerHTML=`<div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>${lbl}</small></div></div>`;
+  $('#qrBox').innerHTML=`<div class="ph"><span class="spinner"></span><small>${lbl}</small></div>`;
+  $('#pairModal').classList.add('show');
   pollQR(encodeURIComponent(cur));
 };
+function closePairModal(){$('#pairModal').classList.remove('show');stopQR();}
+$('#closePair').onclick=closePairModal;
+$('#pairModal').onclick=e=>{if(e.target===$('#pairModal'))closePairModal();};
 async function pollQR(I){
   const tick=async()=>{
     try{const r=await api('/instance/connect/'+I);
-      if(r.connectionStatus==='open'){stopQR();toast('Conectado!','ok');loadTab();return;}
+      if(r.connectionStatus==='open'){closePairModal();toast('Conectado!','ok');loadTab();return;}
       const b=$('#qrBox'); if(!b)return;
       if(r.pairingCode){
         const c=esc(r.pairingCode);
@@ -934,7 +948,7 @@ $('#openCreate').onclick=openCreateModal;
 $('#closeCreate').onclick=closeCreateModal;
 $('#cancelCreate').onclick=closeCreateModal;
 $('#createModal').onclick=e=>{if(e.target===$('#createModal'))closeCreateModal();};
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCreateModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCreateModal();closePairModal();}});
 
 $('#createBtn').onclick=async()=>{
   const name=$('#newName').value.trim(); if(!name){toast('Informe um nome','err');return;}
