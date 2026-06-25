@@ -861,10 +861,16 @@ function closePairModal(){$('#pairModal').classList.remove('show');stopQR();}
 $('#closePair').onclick=closePairModal;
 $('#pairModal').onclick=e=>{if(e.target===$('#pairModal'))closePairModal();};
 async function pollQR(I){
+  let tries=0;
   const tick=async()=>{
     try{const r=await api('/instance/connect/'+I);
       if(r.connectionStatus==='open'){closePairModal();toast('Conectado!','ok');loadTab();return;}
       const b=$('#qrBox'); if(!b)return;
+      const img0=r.base64||(r.code&&r.code.startsWith('data:')?r.code:'');
+      if(!img0 && !r.pairingCode){
+        // Sem QR após várias tentativas: instância provavelmente deslogada.
+        if(++tries>=8){stopQR();b.innerHTML=`<div class="ph"><small style="color:var(--warn)">Não foi possível gerar o QR.<br>A instância pode estar deslogada — feche e clique <b>Reiniciar</b>, ou exclua e crie de novo.</small></div>`;return;}
+      } else tries=0;
       if(r.pairingCode){
         const c=esc(r.pairingCode);
         b.innerHTML=`<div class="paircode">${c}</div><small>No WhatsApp do número: Aparelhos conectados → Conectar → <b>Conectar com número de telefone</b> → digite o código acima.</small>`;

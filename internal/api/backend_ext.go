@@ -67,10 +67,11 @@ func (b *ManagerBackend) Restart(name string) error {
 	if !b.Exists(name) {
 		return ErrInstanceNotFound
 	}
-	// The Manager auto-reconnects supervised instances; an explicit per-instance
-	// stop/start is not exposed in this build, so restart is a best-effort no-op
-	// that simply confirms the instance is known. Documented limitation.
-	return nil
+	// Reconnect the instance: relaunches its supervisor (clearing the terminal
+	// flag), so a device-removed / 401-stopped instance can pair/login again.
+	b.SetQR(name, "")
+	b.SetPairingCode(name, "")
+	return b.mgr.Restart(name)
 }
 
 func (b *ManagerBackend) SendPoll(ctx context.Context, name, jid, pollName string, options []string, selectableCount int) (string, error) {
