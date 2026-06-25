@@ -279,16 +279,5 @@ func (s *Server) handleChatwootFind(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, resp)
 }
 
-// handleChatwootWebhook: POST /chatwoot/webhook/{instance} (NO apikey — Chatwoot
-// posts here). Phase 3 will parse agent replies and forward to WhatsApp; for now
-// it acks so the inbox webhook validates.
-func (s *Server) handleChatwootWebhook(w http.ResponseWriter, r *http.Request) {
-	instance := r.PathValue("instance")
-	if _, ok := s.chatwoot.get(instance); !ok {
-		s.writeJSON(w, http.StatusOK, map[string]any{"status": "ignored"})
-		return
-	}
-	// TODO(phase 3): parse message_created (outgoing) -> send to WhatsApp.
-	io.Copy(io.Discard, io.LimitReader(r.Body, 4<<20))
-	s.writeJSON(w, http.StatusOK, map[string]any{"status": "received"})
-}
+// handleChatwootWebhook (POST /chatwoot/webhook/{instance}, NO apikey) lives in
+// chatwoot_outbound.go (Phase 3): it forwards Chatwoot agent replies to WhatsApp.
