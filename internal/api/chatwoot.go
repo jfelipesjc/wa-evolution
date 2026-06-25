@@ -105,18 +105,20 @@ func (s *chatwootStore) set(instance string, c chatwootConfig) {
 // Auth is the api_access_token header (a user/agent token, NOT Bearer). All paths
 // are /api/v1/accounts/{accountId}/...
 type chatwootClient struct {
-	base      string // provider.url, no trailing slash
-	token     string
-	accountID string
-	hc        *http.Client
+	base                string // provider.url, no trailing slash
+	token               string
+	accountID           string
+	mergeBrazilContacts bool
+	hc                  *http.Client
 }
 
 func newChatwootClient(c chatwootConfig) *chatwootClient {
 	return &chatwootClient{
-		base:      strings.TrimRight(c.URL, "/"),
-		token:     c.Token,
-		accountID: c.AccountID,
-		hc:        &http.Client{Timeout: 30 * time.Second},
+		base:                strings.TrimRight(c.URL, "/"),
+		token:               c.Token,
+		accountID:           c.AccountID,
+		mergeBrazilContacts: c.MergeBrazilContacts,
+		hc:                  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 

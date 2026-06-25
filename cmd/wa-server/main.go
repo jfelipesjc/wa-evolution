@@ -66,10 +66,30 @@ func run(addr, apikey, dir string) error {
 		WebhookDir: dir,
 	})
 
-	// Pump manager events -> webhooks + per-instance ChatStore + QR capture.
+	// Pump manager events -> webhooks + per-instance ChatStore + QR capture +
+	// Chatwoot inbound bridge.
 	feed := func(instance string, ev wa.Event) {
 		if cs := backend.ChatStore(instance); cs != nil {
 			cs.Consume(ev)
+		}
+		// Inbound bridge: a received WhatsApp message -> Chatwoot (no-op unless the
+		// instance has chatwoot enabled). Skip group messages (the bridge also
+		// drops @g.us, but this avoids the work). Media is fetched lazily from the
+		// ChatStore (already populated by Consume above) only if the bridge needs it.
+		if mev, ok := ev.(wa.MessageEvent); ok && !mev.IsGroup {
+			im := api.InboundMessage{
+				JID: mev.From, MsgID: mev.ID, PushName: mev.PushName, Text: mev.Text,
+				IsMedia: mev.Media != nil,
+			}
+			if mev.Media != nil {
+				im.Mimetype = mev.Media.Mimetype
+				im.FileName = mev.Media.FileName
+				jid, id := mev.From, mev.ID
+				im.Download = func() ([]byte, string, error) {
+					return backend.GetBase64FromMedia(context.Background(), instance, jid, id)
+				}
+			}
+			go srv.HandleChatwootInbound(context.Background(), instance, im)
 		}
 		if qr, ok := ev.(wa.QREvent); ok {
 			backend.SetQR(instance, qr.Code)

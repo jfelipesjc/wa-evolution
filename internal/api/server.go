@@ -44,6 +44,9 @@ type Server struct {
 	// chatwoot holds per-instance Chatwoot integration config (persisted) and is
 	// the seam for the WhatsApp<->Chatwoot bridge (see chatwoot.go).
 	chatwoot *chatwootStore
+	// chatwootCache caches resolved Chatwoot contact/conversation ids per
+	// (instance,jid) for the inbound bridge (see chatwoot_inbound.go).
+	chatwootCache *chatwootInboundCache
 
 	logger *log.Logger
 }
@@ -74,8 +77,9 @@ func New(opts Options) *Server {
 		mux:        http.NewServeMux(),
 		dispatcher: newWebhookDispatcher(opts.HTTPClient, logger),
 		cfg:        newConfigStore(),
-		chatwoot:   newChatwootStore(),
-		logger:     logger,
+		chatwoot:      newChatwootStore(),
+		chatwootCache: newChatwootInboundCache(),
+		logger:        logger,
 	}
 	s.dispatcher.setDir(opts.WebhookDir)
 	s.chatwoot.setDir(opts.WebhookDir)
