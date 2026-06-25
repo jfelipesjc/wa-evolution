@@ -23,6 +23,7 @@ type instanceInfo struct {
 	ConnectionStatus string `json:"connectionStatus"`
 	OwnerJid         string `json:"ownerJid,omitempty"`
 	ProfileName      string `json:"profileName,omitempty"`
+	Number           string `json:"number,omitempty"` // pairing-code number ("" = QR-only)
 }
 
 // createInstanceResp is the body of POST /instance/create.

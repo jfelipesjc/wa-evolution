@@ -42,6 +42,10 @@ type Backend interface {
 	// OwnProfile returns the instance's own account number (digits) and display
 	// name (pushName) from its stored creds. Empty strings if not paired yet.
 	OwnProfile(name string) (number, pushName string)
+	// PairingNumber returns the phone number an instance was created to pair by
+	// CODE with ("" when it pairs by QR). The UI uses it to gate the pairing-code
+	// option.
+	PairingNumber(name string) string
 
 	// SendText sends a text message; returns the message id.
 	SendText(ctx context.Context, name, jid, text string) (string, error)
@@ -247,8 +251,9 @@ type mbInstance struct {
 	store    wa.Store
 	mc       *wa.ManagedClient
 	chats    *wa.ChatStore
-	qr       string // latest QR code captured from the event stream
-	pairCode string // latest pairing code captured (number-paired instances)
+	qr         string // latest QR code captured from the event stream
+	pairCode   string // latest pairing code captured (number-paired instances)
+	pairNumber string // the phone number this instance pairs by code with ("" = QR)
 }
 
 // NewManagerBackend builds the production Backend backed by the given Manager,
@@ -319,6 +324,16 @@ func (b *ManagerBackend) PairingCode(name string) string {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		return in.pairCode
+	}
+	return ""
+}
+
+// PairingNumber returns the number an instance pairs by code with ("" = QR).
+func (b *ManagerBackend) PairingNumber(name string) string {
+	if in, ok := b.get(name); ok {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return in.pairNumber
 	}
 	return ""
 }
@@ -407,7 +422,7 @@ func (b *ManagerBackend) createInternal(name, number string) error {
 		return err
 	}
 	b.mu.Lock()
-	b.instances[name] = &mbInstance{name: name, store: st, mc: mc, chats: wa.NewChatStore()}
+	b.instances[name] = &mbInstance{name: name, store: st, mc: mc, chats: wa.NewChatStore(), pairNumber: number}
 	b.mu.Unlock()
 	return nil
 }

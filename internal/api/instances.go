@@ -91,7 +91,7 @@ func (s *Server) handleFetchInstances(w http.ResponseWriter, r *http.Request) {
 	out := make([]instanceInfo, 0, len(names))
 	for _, name := range names {
 		number, pushName := s.backend.OwnProfile(name)
-		info := instanceInfo{InstanceName: name, ConnectionStatus: status[name], ProfileName: pushName}
+		info := instanceInfo{InstanceName: name, ConnectionStatus: status[name], ProfileName: pushName, Number: s.backend.PairingNumber(name)}
 		if number != "" {
 			info.OwnerJid = number + "@s.whatsapp.net"
 		}

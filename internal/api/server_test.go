@@ -172,6 +172,12 @@ func (f *fakeBackend) OwnProfile(name string) (string, string) {
 	return f.ownNumber, f.ownName
 }
 
+func (f *fakeBackend) PairingNumber(name string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.lastCreateNumber
+}
+
 func (f *fakeBackend) Connect(ctx context.Context, name string) (string, error) {
 	if f.connErr != nil {
 		return "", f.connErr
