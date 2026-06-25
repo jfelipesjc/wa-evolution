@@ -272,6 +272,7 @@
   .qr img{width:232px;height:232px;max-width:62vw;image-rendering:pixelated;border-radius:8px}
   .qr small{color:#3a3f47;font-weight:600;letter-spacing:.02em}
   .qr .ph{width:232px;height:232px;max-width:62vw;display:grid;place-items:center;color:#9aa0a6;gap:10px}
+  .qr .paircode{font:800 34px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.22em;color:#0d1117;padding:18px 14px 12px;text-align:center;word-break:break-all}
 
   .muted{color:var(--muted)}
   label{font-size:11.5px;color:var(--muted);display:block;margin-bottom:7px;font-weight:500;letter-spacing:.02em}
@@ -454,8 +455,9 @@
         <div class="card">
           <div class="section-title">Nova instância</div>
           <div class="toolbar">
-            <div class="field" style="flex:1;min-width:180px;margin:0"><label for="newName">Nome</label><input id="newName" placeholder="nome-da-instancia" autocomplete="off" spellcheck="false"></div>
-            <div class="field" style="flex:2;min-width:200px;margin:0"><label for="newHook">Webhook URL (opcional)</label><input id="newHook" placeholder="https://.../webhook" autocomplete="off" spellcheck="false"></div>
+            <div class="field" style="flex:1;min-width:160px;margin:0"><label for="newName">Nome</label><input id="newName" placeholder="nome-da-instancia" autocomplete="off" spellcheck="false"></div>
+            <div class="field" style="flex:1;min-width:170px;margin:0"><label for="newNumber">Número (opcional)</label><input id="newNumber" placeholder="55 12 99999-8888" autocomplete="off" spellcheck="false" inputmode="tel"></div>
+            <div class="field" style="flex:2;min-width:190px;margin:0"><label for="newHook">Webhook URL (opcional)</label><input id="newHook" placeholder="https://.../webhook" autocomplete="off" spellcheck="false"></div>
             <button class="primary" id="createBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Criar
             </button>
@@ -693,7 +695,7 @@ async function tabOverview(I){
   }else{
     body(`<div class="card">
       <div class="kv"><b>Status</b><span>${pill(st)}</span></div>
-      <p class="hint">Escaneie o QR no WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b>.</p>
+      <p class="hint">No WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b> (QR, ou código se a instância foi criada com número).</p>
       <div class="qr" id="qrBox"><div class="ph"><span class="spinner"></span><small>gerando QR…</small></div></div>
       <div class="row" style="margin-top:16px">
         <button class="sm" onclick="instAction('restart','PUT')">Reiniciar</button>
@@ -706,8 +708,15 @@ async function pollQR(I){
   const tick=async()=>{
     try{const r=await api('/instance/connect/'+I);
       if(r.connectionStatus==='open'){stopQR();toast('Conectado!','ok');loadTab();return;}
+      const b=$('#qrBox'); if(!b)return;
+      // Pareamento por NÚMERO: o servidor devolve um código de 8 dígitos.
+      if(r.pairingCode){
+        const c=esc(r.pairingCode);
+        b.innerHTML=`<div class="paircode">${c}</div><small>No WhatsApp do número: Aparelhos conectados → Conectar → <b>Conectar com número de telefone</b> → digite o código acima.</small>`;
+        return;
+      }
       const img=r.base64||(r.code&&r.code.startsWith('data:')?r.code:'');
-      const b=$('#qrBox'); if(b&&img)b.innerHTML=`<img src="${img}" alt="QR Code"><small>aponte a câmera do WhatsApp</small>`;
+      if(img)b.innerHTML=`<img src="${img}" alt="QR Code"><small>aponte a câmera do WhatsApp</small>`;
     }catch(e){}
   };
   await tick(); stopQR(); qrTimer=setInterval(tick,3000);
@@ -807,8 +816,10 @@ async function tabGroups(I){
 $('#createBtn').onclick=async()=>{
   const name=$('#newName').value.trim(); if(!name){toast('Informe um nome','err');return;}
   const webhookUrl=$('#newHook').value.trim();
-  try{await api('/instance/create',{method:'POST',body:JSON.stringify({instanceName:name,...(webhookUrl?{webhookUrl}:{})})});
-    $('#newName').value='';$('#newHook').value='';toast('Instância criada','ok');openInstance(name);
+  const number=$('#newNumber').value.trim();
+  try{await api('/instance/create',{method:'POST',body:JSON.stringify({instanceName:name,...(webhookUrl?{webhookUrl}:{}),...(number?{number}:{})})});
+    $('#newName').value='';$('#newHook').value='';$('#newNumber').value='';
+    toast(number?'Instância criada — gerando código':'Instância criada','ok');openInstance(name);
   }catch(e){toast(e.message,'err');}
 };
 $('#newName').addEventListener('keydown',e=>{if(e.key==='Enter')$('#createBtn').click();});

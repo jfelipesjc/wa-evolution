@@ -74,6 +74,10 @@ func run(addr, apikey, dir string) error {
 		if qr, ok := ev.(wa.QREvent); ok {
 			backend.SetQR(instance, qr.Code)
 		}
+		if pc, ok := ev.(wa.PairingCodeEvent); ok {
+			backend.SetPairingCode(instance, pc.Code)
+			fmt.Fprintf(os.Stderr, "[evt] %s PAIRING CODE %s\n", instance, pc.Code)
+		}
 		// Connection-lifecycle visibility: surface login/disconnect (with the
 		// stream:error reason) so session drops are diagnosable from the log.
 		switch e := ev.(type) {

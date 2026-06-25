@@ -59,6 +59,46 @@ func TestSendWhatsAppAudio(t *testing.T) {
 	}
 }
 
+func TestCreateWithNumber_PairingCode(t *testing.T) {
+	fb := newFakeBackend()
+	h := newTestServer(t, fb)
+	// create with a number -> CreateWithNumber receives the sanitized-ish number.
+	rec := do(t, h, "POST", "/instance/create", testKey, createInstanceReq{InstanceName: "bot1", Number: "+55 12 99999-8888"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if fb.lastCreateNumber != "+55 12 99999-8888" {
+		t.Fatalf("CreateWithNumber number = %q", fb.lastCreateNumber)
+	}
+	// connect now returns the pairing code (not a QR) when one is present.
+	fb.pairingCode = "ABCD-1234"
+	rec = do(t, h, "GET", "/instance/connect/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("connect status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var cr connectResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &cr)
+	if cr.PairingCode != "ABCD-1234" {
+		t.Fatalf("pairingCode = %q, want ABCD-1234", cr.PairingCode)
+	}
+}
+
+func TestCreate_NoNumber_UsesQR(t *testing.T) {
+	fb := newFakeBackend()
+	fb.qr = "2@abc,def"
+	h := newTestServer(t, fb)
+	_ = do(t, h, "POST", "/instance/create", testKey, createInstanceReq{InstanceName: "bot1"})
+	if fb.lastCreateNumber != "" {
+		t.Fatalf("expected no number, got %q", fb.lastCreateNumber)
+	}
+	rec := do(t, h, "GET", "/instance/connect/bot1", testKey, nil)
+	var cr connectResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &cr)
+	if cr.PairingCode != "" || cr.Code == "" {
+		t.Fatalf("expected QR (code set, no pairingCode), got %+v", cr)
+	}
+}
+
 func TestSendPtv(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")

@@ -7,10 +7,13 @@ package api
 
 // --- instance lifecycle ---
 
-// createInstanceReq is the body of POST /instance/create.
+// createInstanceReq is the body of POST /instance/create. If Number is set, the
+// instance pairs via pairing CODE for that phone number (Evolution-compatible)
+// instead of QR.
 type createInstanceReq struct {
 	InstanceName string `json:"instanceName"`
 	WebhookURL   string `json:"webhookUrl,omitempty"`
+	Number       string `json:"number,omitempty"`
 }
 
 // instanceInfo is the per-instance descriptor returned by create/fetch.

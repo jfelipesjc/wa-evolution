@@ -16,8 +16,14 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "instanceName is required")
 		return
 	}
-	if err := s.backend.Create(req.InstanceName); err != nil {
-		s.writeError(w, http.StatusConflict, err.Error())
+	var cerr error
+	if req.Number != "" {
+		cerr = s.backend.CreateWithNumber(req.InstanceName, req.Number)
+	} else {
+		cerr = s.backend.Create(req.InstanceName)
+	}
+	if cerr != nil {
+		s.writeError(w, http.StatusConflict, cerr.Error())
 		return
 	}
 	if req.WebhookURL != "" {
@@ -46,6 +52,16 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Number-paired instances surface an 8-char pairing code instead of a QR. If
+	// one is present, return it (Evolution clients read `pairingCode`).
+	if pc := s.backend.PairingCode(name); pc != "" {
+		s.writeJSON(w, http.StatusOK, connectResp{
+			PairingCode: pc,
+			Instance:    name,
+			ConnStatus:  s.backend.Status()[name],
+		})
 		return
 	}
 	b64, dataURI := qrPNGBase64(code)

@@ -31,10 +31,12 @@ type sentMedia struct {
 type fakeBackend struct {
 	mu sync.Mutex
 
-	exists   map[string]bool
-	status   map[string]string
-	qr       string
-	connErr  error
+	exists           map[string]bool
+	status           map[string]string
+	qr               string
+	pairingCode      string
+	lastCreateNumber string
+	connErr          error
 	texts    []sentText
 	medias   []sentMedia
 	messages map[string][]StoredMsg // jid -> stored
@@ -147,6 +149,19 @@ func (f *fakeBackend) Create(name string) error {
 	f.exists[name] = true
 	f.status[name] = "connecting"
 	return nil
+}
+
+func (f *fakeBackend) CreateWithNumber(name, number string) error {
+	f.mu.Lock()
+	f.lastCreateNumber = number
+	f.mu.Unlock()
+	return f.Create(name)
+}
+
+func (f *fakeBackend) PairingCode(name string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.pairingCode
 }
 
 func (f *fakeBackend) Connect(ctx context.Context, name string) (string, error) {

@@ -19,10 +19,18 @@ import (
 // production implementation (ManagerBackend) adapts *wa.Manager.
 type Backend interface {
 	// Create registers a new instance (opens its store, adds it to the manager).
+	// It pairs by QR.
 	Create(name string) error
+	// CreateWithNumber registers a new instance that pairs via pairing CODE for the
+	// given phone number (returns the 8-char code through PairingCode) instead of
+	// QR. An empty number behaves like Create.
+	CreateWithNumber(name, number string) error
 	// Connect starts the instance and returns the latest QR code string captured
 	// from its event stream (empty if already logged in / none yet).
 	Connect(ctx context.Context, name string) (qr string, err error)
+	// PairingCode returns the latest pairing code captured for an instance (empty
+	// if the instance pairs by QR / none yet). Populated for number-paired instances.
+	PairingCode(name string) string
 	// Delete removes an instance (stops + closes its store).
 	Delete(name string) error
 	// Logout disconnects an instance without deleting its store.
@@ -232,11 +240,12 @@ type ManagerBackend struct {
 }
 
 type mbInstance struct {
-	name  string
-	store wa.Store
-	mc    *wa.ManagedClient
-	chats *wa.ChatStore
-	qr    string // latest QR code captured from the event stream
+	name     string
+	store    wa.Store
+	mc       *wa.ManagedClient
+	chats    *wa.ChatStore
+	qr       string // latest QR code captured from the event stream
+	pairCode string // latest pairing code captured (number-paired instances)
 }
 
 // NewManagerBackend builds the production Backend backed by the given Manager,
@@ -274,6 +283,8 @@ func (b *ManagerBackend) Restore() ([]string, error) {
 		if name == "" || b.Exists(name) {
 			continue
 		}
+		// Restored instances are already paired (creds in the store) — they log in
+		// via the normal connect path, so no pairing number is needed.
 		if err := b.Create(name); err != nil {
 			return restored, fmt.Errorf("restore %q: %w", name, err)
 		}
@@ -288,6 +299,26 @@ func (b *ManagerBackend) ChatStore(name string) *wa.ChatStore { return b.chatSto
 
 // SetQR records the latest QR code for an instance (called by the event pump).
 func (b *ManagerBackend) SetQR(name, code string) { b.setQR(name, code) }
+
+// SetPairingCode records the latest pairing code for an instance (called by the
+// event pump when a PairingCodeEvent arrives for a number-paired instance).
+func (b *ManagerBackend) SetPairingCode(name, code string) {
+	if in, ok := b.get(name); ok {
+		b.mu.Lock()
+		in.pairCode = code
+		b.mu.Unlock()
+	}
+}
+
+// PairingCode returns the latest captured pairing code for an instance.
+func (b *ManagerBackend) PairingCode(name string) string {
+	if in, ok := b.get(name); ok {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return in.pairCode
+	}
+	return ""
+}
 
 func (b *ManagerBackend) get(name string) (*mbInstance, bool) {
 	b.mu.Lock()
@@ -319,7 +350,14 @@ func (b *ManagerBackend) setQR(name, code string) {
 	}
 }
 
-func (b *ManagerBackend) Create(name string) error {
+func (b *ManagerBackend) Create(name string) error { return b.createInternal(name, "") }
+
+// CreateWithNumber registers an instance that pairs by code for the given number.
+func (b *ManagerBackend) CreateWithNumber(name, number string) error {
+	return b.createInternal(name, number)
+}
+
+func (b *ManagerBackend) createInternal(name, number string) error {
 	if name == "" {
 		return errors.New("empty instance name")
 	}
@@ -335,7 +373,14 @@ func (b *ManagerBackend) Create(name string) error {
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
-	mc, err := b.mgr.Add(name, st)
+	// number set -> pair via 8-char pairing code for that phone; else QR.
+	var mc *wa.ManagedClient
+	number = sanitizeNumber(number)
+	if number != "" {
+		mc, err = b.mgr.AddPaired(name, st, number)
+	} else {
+		mc, err = b.mgr.Add(name, st)
+	}
 	if err != nil {
 		_ = st.Close()
 		return err
@@ -344,6 +389,18 @@ func (b *ManagerBackend) Create(name string) error {
 	b.instances[name] = &mbInstance{name: name, store: st, mc: mc, chats: wa.NewChatStore()}
 	b.mu.Unlock()
 	return nil
+}
+
+// sanitizeNumber strips everything but digits from a phone number (the pairing
+// flow wants a bare international number, e.g. 5512999998888).
+func sanitizeNumber(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func (b *ManagerBackend) Connect(ctx context.Context, name string) (string, error) {
