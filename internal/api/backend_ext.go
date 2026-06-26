@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	wa "github.com/felipeleal/wa-go/wa"
+	wa "github.com/jfelipesjc/wa-go/wa"
 )
 
 // --- backend-neutral arg types for the extended parity surface ---

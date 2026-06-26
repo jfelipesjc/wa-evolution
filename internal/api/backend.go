@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	wa "github.com/felipeleal/wa-go/wa"
+	wa "github.com/jfelipesjc/wa-go/wa"
 )
 
 // Backend is the seam between the HTTP handlers and the WhatsApp session stack.

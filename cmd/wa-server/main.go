@@ -23,8 +23,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/felipeleal/wa-evolution/internal/api"
-	wa "github.com/felipeleal/wa-go/wa"
+	"github.com/jfelipesjc/wa-evolution/internal/api"
+	wa "github.com/jfelipesjc/wa-go/wa"
 )
 
 func main() {

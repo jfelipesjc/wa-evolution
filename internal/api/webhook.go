@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	wa "github.com/felipeleal/wa-go/wa"
+	wa "github.com/jfelipesjc/wa-go/wa"
 )
 
 // httpDoer is the minimal http.Client surface the dispatcher needs; tests inject
