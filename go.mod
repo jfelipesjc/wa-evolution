@@ -3,7 +3,7 @@ module github.com/jfelipesjc/wa-evolution
 go 1.22.2
 
 require (
-	github.com/jfelipesjc/wa-go v0.0.0
+	github.com/jfelipesjc/wa-go v0.1.0
 	rsc.io/qr v0.2.0
 )
 
@@ -24,5 +24,3 @@ require (
 	modernc.org/memory v1.8.2 // indirect
 	modernc.org/sqlite v1.36.0 // indirect
 )
-
-replace github.com/jfelipesjc/wa-go => ../wa-go
