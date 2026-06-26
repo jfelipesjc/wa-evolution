@@ -1,0 +1,18 @@
+# VCS / local tooling
+.git
+.github
+
+# Secrets & runtime state — NEVER ship these into an image
+instances/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local build artifacts
+/wa-server
+/bin/
+
+# Docs not needed at build time
+docs/
+deploy/
