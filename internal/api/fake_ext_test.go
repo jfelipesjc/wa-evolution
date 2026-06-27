@@ -126,6 +126,9 @@ func (f *fakeBackend) GroupUpdatePicture(ctx context.Context, name, groupJID str
 }
 
 func (f *fakeBackend) GroupUpdateSetting(ctx context.Context, name, groupJID, setting string) error {
+	f.mu.Lock()
+	f.lastGroupSetting = setting
+	f.mu.Unlock()
 	return nil
 }
 

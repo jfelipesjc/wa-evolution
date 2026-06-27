@@ -418,10 +418,16 @@ func (b *ManagerBackend) GetBase64FromMedia(ctx context.Context, name, jid, msgI
 	// in the chat's history. ChatMessages returns newest-last; scan for the id.
 	for _, sm := range in.chats.ChatMessages(jid, 0) {
 		if sm.Key == msgID {
-			if sm.Raw == nil {
-				return nil, "", fmt.Errorf("stored message %q has no raw payload", msgID)
+			// History-sync messages carry the raw WebMessageInfo; live messages
+			// carry only the Media descriptor (Raw is nil). Both can download.
+			if sm.Raw != nil {
+				return c.DownloadStoredMedia(ctx, sm.Raw)
 			}
-			return c.DownloadStoredMedia(ctx, sm.Raw)
+			if sm.Media != nil {
+				data, derr := c.DownloadMedia(ctx, sm.Media)
+				return data, sm.Media.Mimetype, derr
+			}
+			return nil, "", fmt.Errorf("stored message %q has no downloadable media", msgID)
 		}
 	}
 	return nil, "", fmt.Errorf("message %q not found in chat %q history", msgID, jid)

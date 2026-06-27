@@ -331,11 +331,24 @@ func TestGroupUpdateSetting(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")
 	h := newTestServer(t, fb)
-	rec := do(t, h, "PUT", "/group/updateSetting/bot1", testKey, updateGroupSettingReq{GroupJID: "123@g.us", Action: "announcement"})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	// Evolution action names must map to the lib's setting names before reaching
+	// the backend: announcement->announce, not_announcement->not_announce,
+	// locked/unlocked pass through unchanged.
+	for _, tc := range []struct{ action, want string }{
+		{"announcement", "announce"},
+		{"not_announcement", "not_announce"},
+		{"locked", "locked"},
+		{"unlocked", "unlocked"},
+	} {
+		rec := do(t, h, "PUT", "/group/updateSetting/bot1", testKey, updateGroupSettingReq{GroupJID: "123@g.us", Action: tc.action})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("action %q: status = %d; body=%s", tc.action, rec.Code, rec.Body.String())
+		}
+		if fb.lastGroupSetting != tc.want {
+			t.Fatalf("action %q passed %q to lib; want %q", tc.action, fb.lastGroupSetting, tc.want)
+		}
 	}
-	rec = do(t, h, "PUT", "/group/updateSetting/bot1", testKey, updateGroupSettingReq{GroupJID: "123@g.us", Action: "nope"})
+	rec := do(t, h, "PUT", "/group/updateSetting/bot1", testKey, updateGroupSettingReq{GroupJID: "123@g.us", Action: "nope"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad action status = %d, want 400", rec.Code)
 	}

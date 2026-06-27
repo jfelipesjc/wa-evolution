@@ -36,6 +36,7 @@ type fakeBackend struct {
 	qr               string
 	pairingCode      string
 	lastCreateNumber string
+	lastGroupSetting  string
 	ownNumber         string
 	ownName           string
 	lastReqPairNumber string

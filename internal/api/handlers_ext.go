@@ -575,7 +575,16 @@ func (s *Server) handleGroupUpdateSetting(w http.ResponseWriter, r *http.Request
 		s.writeError(w, http.StatusBadRequest, "groupJid is required")
 		return
 	}
-	if err := s.backend.GroupUpdateSetting(r.Context(), name, req.GroupJID, req.Action); err != nil {
+	// Evolution names are announcement/not_announcement; the wa-go lib expects
+	// announce/not_announce (locked/unlocked match). Map before delegating.
+	setting := req.Action
+	switch setting {
+	case "announcement":
+		setting = "announce"
+	case "not_announcement":
+		setting = "not_announce"
+	}
+	if err := s.backend.GroupUpdateSetting(r.Context(), name, req.GroupJID, setting); err != nil {
 		s.writeSendError(w, err)
 		return
 	}
