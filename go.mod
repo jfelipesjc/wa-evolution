@@ -3,7 +3,7 @@ module github.com/jfelipesjc/wa-evolution
 go 1.22.2
 
 require (
-	github.com/jfelipesjc/wa-go v0.1.1
+	github.com/jfelipesjc/wa-go v0.1.2
 	rsc.io/qr v0.2.0
 )
 

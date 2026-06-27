@@ -708,6 +708,128 @@ func (s *Server) handleMarkChatUnread(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
 }
 
+// handlePinChat: POST /chat/pinChat/{instance} {chat, pin}.
+func (s *Server) handlePinChat(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req pinChatReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Chat == "" {
+		s.writeError(w, http.StatusBadRequest, "chat is required")
+		return
+	}
+	jid := normalizeJID(req.Chat)
+	if err := s.backend.PinChat(r.Context(), name, jid, req.Pin); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleMuteChat: POST /chat/muteChat/{instance} {chat, duration}. Duration is
+// in seconds (0 = unmute).
+func (s *Server) handleMuteChat(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req muteChatReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Chat == "" {
+		s.writeError(w, http.StatusBadRequest, "chat is required")
+		return
+	}
+	jid := normalizeJID(req.Chat)
+	if err := s.backend.MuteChat(r.Context(), name, jid, req.Duration); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleStarMessage: POST /message/starMessage/{instance}. Accepts
+// {key:{remoteJid,id,fromMe}} and a {number, messageId, fromMe} form, plus star.
+func (s *Server) handleStarMessage(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req starMessageReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	var rawJID, msgID string
+	var fromMe bool
+	if req.Key != nil && req.Key.ID != "" {
+		rawJID, msgID, fromMe = req.Key.RemoteJID, req.Key.ID, req.Key.FromMe
+	} else {
+		rawJID, msgID, fromMe = req.Number, req.MessageID, req.FromMe
+	}
+	if rawJID == "" || msgID == "" {
+		s.writeError(w, http.StatusBadRequest, "key{remoteJid,id} or {number,messageId} is required")
+		return
+	}
+	jid := normalizeJID(rawJID)
+	if err := s.backend.StarMessage(r.Context(), name, jid, msgID, fromMe, req.Star); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleClearChat: POST /chat/clearChat/{instance} {chat}.
+func (s *Server) handleClearChat(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req clearChatReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Chat == "" {
+		s.writeError(w, http.StatusBadRequest, "chat is required")
+		return
+	}
+	jid := normalizeJID(req.Chat)
+	if err := s.backend.ClearChat(r.Context(), name, jid); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleDeleteChat: POST /chat/deleteChat/{instance} {chat}.
+func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req deleteChatReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Chat == "" {
+		s.writeError(w, http.StatusBadRequest, "chat is required")
+		return
+	}
+	jid := normalizeJID(req.Chat)
+	if err := s.backend.DeleteChat(r.Context(), name, jid); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleResyncAppState: POST /chat/resyncAppState/{instance} {collections, fresh}.
+func (s *Server) handleResyncAppState(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("instance")
+	var req resyncAppStateReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Collections) == 0 {
+		s.writeError(w, http.StatusBadRequest, "collections is required")
+		return
+	}
+	if err := s.backend.ResyncAppState(r.Context(), name, req.Collections, req.Fresh); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
 // handleFindStatusMessage: POST /chat/findStatusMessage/{instance}. Returns the
 // stored status@broadcast (stories) messages, reusing the findMessages store.
 func (s *Server) handleFindStatusMessage(w http.ResponseWriter, r *http.Request) {

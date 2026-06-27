@@ -441,6 +441,54 @@ func (b *ManagerBackend) MarkChatUnread(ctx context.Context, name, jid string) e
 	return c.MarkRead(ctx, jid, false)
 }
 
+func (b *ManagerBackend) PinChat(ctx context.Context, name, jid string, pin bool) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.PinChat(ctx, jid, pin)
+}
+
+func (b *ManagerBackend) MuteChat(ctx context.Context, name, jid string, seconds int) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.MuteChat(ctx, jid, time.Duration(seconds)*time.Second)
+}
+
+func (b *ManagerBackend) StarMessage(ctx context.Context, name, jid, msgID string, fromMe, star bool) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.StarMessage(ctx, jid, wa.MsgKey{ID: msgID, FromMe: fromMe, RemoteJID: jid}, star)
+}
+
+func (b *ManagerBackend) ClearChat(ctx context.Context, name, jid string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.ClearChat(ctx, jid)
+}
+
+func (b *ManagerBackend) DeleteChat(ctx context.Context, name, jid string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.DeleteChat(ctx, jid)
+}
+
+func (b *ManagerBackend) ResyncAppState(ctx context.Context, name string, collections []string, fresh bool) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.ResyncAppState(ctx, collections, fresh)
+}
+
 // --- helpers ---
 
 func chatToArg(ch wa.Chat) ChatInfoArg {

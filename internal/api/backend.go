@@ -184,6 +184,20 @@ type Backend interface {
 	GetBase64FromMedia(ctx context.Context, name, jid, msgID string) ([]byte, string, error)
 	// MarkChatUnread marks a whole chat as unread (app-state).
 	MarkChatUnread(ctx context.Context, name, jid string) error
+
+	// PinChat pins/unpins a chat (app-state).
+	PinChat(ctx context.Context, name, jid string, pin bool) error
+	// MuteChat mutes a chat for the given duration in seconds (0 = unmute).
+	MuteChat(ctx context.Context, name, jid string, seconds int) error
+	// StarMessage stars/unstars a single message in a chat (app-state).
+	StarMessage(ctx context.Context, name, jid, msgID string, fromMe, star bool) error
+	// ClearChat clears a chat's messages for this account, keeping the chat (app-state).
+	ClearChat(ctx context.Context, name, jid string) error
+	// DeleteChat deletes a chat for this account (app-state).
+	DeleteChat(ctx context.Context, name, jid string) error
+	// ResyncAppState fetches and applies the server's app-state for the given
+	// collections (fresh requests a full snapshot).
+	ResyncAppState(ctx context.Context, name string, collections []string, fresh bool) error
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.

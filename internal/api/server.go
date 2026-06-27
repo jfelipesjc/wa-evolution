@@ -173,6 +173,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /chat/getBase64FromMediaMessage/{instance}", s.handleGetBase64FromMedia)
 	s.mux.HandleFunc("POST /chat/markChatUnread/{instance}", s.handleMarkChatUnread)
 	s.mux.HandleFunc("POST /chat/findStatusMessage/{instance}", s.handleFindStatusMessage)
+	s.mux.HandleFunc("POST /chat/pinChat/{instance}", s.handlePinChat)
+	s.mux.HandleFunc("POST /chat/muteChat/{instance}", s.handleMuteChat)
+	s.mux.HandleFunc("POST /message/starMessage/{instance}", s.handleStarMessage)
+	s.mux.HandleFunc("POST /chat/clearChat/{instance}", s.handleClearChat)
+	s.mux.HandleFunc("POST /chat/deleteChat/{instance}", s.handleDeleteChat)
+	s.mux.HandleFunc("POST /chat/resyncAppState/{instance}", s.handleResyncAppState)
 
 	// group
 	s.mux.HandleFunc("GET /group/findGroupInfos/{instance}", s.handleGroupMetadata)

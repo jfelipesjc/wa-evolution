@@ -33,7 +33,7 @@ type sendPtvReq struct {
 // --- chat ---
 
 type archiveChatReq struct {
-	Chat    string `json:"chat"`
+	Chat        string `json:"chat"`
 	LastMessage *struct {
 		Key messageKey `json:"key"`
 	} `json:"lastMessage,omitempty"`
@@ -42,6 +42,43 @@ type archiveChatReq struct {
 
 type jidQueryReq struct {
 	Number string `json:"number"`
+}
+
+type pinChatReq struct {
+	Chat string `json:"chat"`
+	Pin  bool   `json:"pin"`
+}
+
+// muteChatReq is the body of POST /chat/muteChat/{instance}. Duration is in
+// seconds (0 = unmute).
+type muteChatReq struct {
+	Chat     string `json:"chat"`
+	Duration int    `json:"duration"` // seconds; 0 = unmute
+}
+
+// starMessageReq is the body of POST /message/starMessage/{instance}. It accepts
+// Evolution's {key:{remoteJid,id,fromMe}} form and a {number, messageId, fromMe}
+// convenience form, plus the star flag.
+type starMessageReq struct {
+	Key       *messageKey `json:"key,omitempty"`
+	Number    string      `json:"number,omitempty"`
+	MessageID string      `json:"messageId,omitempty"`
+	FromMe    bool        `json:"fromMe,omitempty"`
+	Star      bool        `json:"star"`
+}
+
+type clearChatReq struct {
+	Chat string `json:"chat"`
+}
+
+type deleteChatReq struct {
+	Chat string `json:"chat"`
+}
+
+// resyncAppStateReq is the body of POST /chat/resyncAppState/{instance}.
+type resyncAppStateReq struct {
+	Collections []string `json:"collections"`
+	Fresh       bool     `json:"fresh"`
 }
 
 type updatePrivacyReq struct {
@@ -136,7 +173,7 @@ type updateGroupSettingReq struct {
 type sendInviteReq struct {
 	GroupJID    string   `json:"groupJid"`
 	Numbers     []string `json:"numbers"`
-	Description  string   `json:"description"`
+	Description string   `json:"description"`
 }
 
 type revokeInviteResp struct {
@@ -161,7 +198,7 @@ type handleLabelReq struct {
 // --- call ---
 
 type offerCallReq struct {
-	Number string `json:"number"`
+	Number  string `json:"number"`
 	IsVideo bool   `json:"isVideo"`
 }
 

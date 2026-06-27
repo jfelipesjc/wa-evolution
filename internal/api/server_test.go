@@ -31,22 +31,22 @@ type sentMedia struct {
 type fakeBackend struct {
 	mu sync.Mutex
 
-	exists           map[string]bool
-	status           map[string]string
-	qr               string
-	pairingCode      string
-	lastCreateNumber string
+	exists            map[string]bool
+	status            map[string]string
+	qr                string
+	pairingCode       string
+	lastCreateNumber  string
 	lastGroupSetting  string
 	ownNumber         string
 	ownName           string
 	lastReqPairNumber string
 	lastQuoted        QuotedRef
 	connErr           error
-	texts    []sentText
-	medias   []sentMedia
-	messages map[string][]StoredMsg // jid -> stored
-	numbers  []NumberStatus
-	groups   []GroupArg
+	texts             []sentText
+	medias            []sentMedia
+	messages          map[string][]StoredMsg // jid -> stored
+	numbers           []NumberStatus
+	groups            []GroupArg
 
 	presences []sentPresence
 	reads     []sentRead
@@ -76,6 +76,29 @@ type fakeBackend struct {
 	mediaBytes    []byte
 	mediaMime     string
 	unreads       []string
+	pins          []sentPin
+	mutes         []sentMute
+	stars         []sentStar
+	clears        []string
+	chatDeletes   []string
+	resyncs       []sentResync
+}
+
+type sentPin struct {
+	jid string
+	pin bool
+}
+type sentMute struct {
+	jid     string
+	seconds int
+}
+type sentStar struct {
+	jid, msgID   string
+	fromMe, star bool
+}
+type sentResync struct {
+	collections []string
+	fresh       bool
 }
 
 type sentPoll struct {

@@ -527,6 +527,114 @@ func TestMarkChatUnread(t *testing.T) {
 	}
 }
 
+func TestPinChat(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/pinChat/bot1", testKey, pinChatReq{Chat: "5512999", Pin: true})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.pins) != 1 || fb.pins[0].jid != "5512999@s.whatsapp.net" || !fb.pins[0].pin {
+		t.Fatalf("pins recorded %+v", fb.pins)
+	}
+}
+
+func TestPinChat_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/pinChat/bot1", testKey, pinChatReq{Pin: true})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestMuteChat(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/muteChat/bot1", testKey, muteChatReq{Chat: "5512999", Duration: 3600})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.mutes) != 1 || fb.mutes[0].jid != "5512999@s.whatsapp.net" || fb.mutes[0].seconds != 3600 {
+		t.Fatalf("mutes recorded %+v", fb.mutes)
+	}
+}
+
+func TestStarMessage(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/starMessage/bot1", testKey, starMessageReq{Number: "5512999", MessageID: "MSG1", FromMe: true, Star: true})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.stars) != 1 || fb.stars[0].jid != "5512999@s.whatsapp.net" || fb.stars[0].msgID != "MSG1" || !fb.stars[0].fromMe || !fb.stars[0].star {
+		t.Fatalf("stars recorded %+v", fb.stars)
+	}
+}
+
+func TestStarMessage_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/message/starMessage/bot1", testKey, starMessageReq{Number: "5512999"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestClearChat(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/clearChat/bot1", testKey, clearChatReq{Chat: "5512999"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.clears) != 1 || fb.clears[0] != "5512999@s.whatsapp.net" {
+		t.Fatalf("clears = %+v", fb.clears)
+	}
+}
+
+func TestDeleteChat(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/deleteChat/bot1", testKey, deleteChatReq{Chat: "5512999"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.chatDeletes) != 1 || fb.chatDeletes[0] != "5512999@s.whatsapp.net" {
+		t.Fatalf("chatDeletes = %+v", fb.chatDeletes)
+	}
+}
+
+func TestResyncAppState(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/resyncAppState/bot1", testKey, resyncAppStateReq{Collections: []string{"regular", "critical_block"}, Fresh: true})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.resyncs) != 1 || len(fb.resyncs[0].collections) != 2 || !fb.resyncs[0].fresh {
+		t.Fatalf("resyncs = %+v", fb.resyncs)
+	}
+}
+
+func TestResyncAppState_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/chat/resyncAppState/bot1", testKey, resyncAppStateReq{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
 func TestFindStatusMessage(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")
