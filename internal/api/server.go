@@ -193,6 +193,38 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /group/toggleEphemeral/{instance}", s.handleGroupToggleEphemeral)
 	s.mux.HandleFunc("PUT /group/updateSetting/{instance}", s.handleGroupUpdateSetting)
 
+	// communities
+	s.mux.HandleFunc("POST /community/create/{instance}", s.handleCommunityCreate)
+	s.mux.HandleFunc("GET /community/findCommunity/{instance}", s.handleCommunityFind)
+	s.mux.HandleFunc("POST /community/updateSubject/{instance}", s.handleCommunityUpdateSubject)
+	s.mux.HandleFunc("POST /community/updateDescription/{instance}", s.handleCommunityUpdateDescription)
+	s.mux.HandleFunc("POST /community/linkGroup/{instance}", s.handleCommunityLinkGroup)
+	s.mux.HandleFunc("POST /community/unlinkGroup/{instance}", s.handleCommunityUnlinkGroup)
+	s.mux.HandleFunc("GET /community/linkedGroups/{instance}", s.handleCommunityLinkedGroups)
+	s.mux.HandleFunc("GET /community/requestList/{instance}", s.handleCommunityRequestList)
+	s.mux.HandleFunc("POST /community/requestUpdate/{instance}", s.handleCommunityRequestUpdate)
+	s.mux.HandleFunc("POST /community/updateParticipant/{instance}", s.handleCommunityUpdateParticipant)
+	s.mux.HandleFunc("POST /community/joinApprovalMode/{instance}", s.handleCommunityJoinApprovalMode)
+	s.mux.HandleFunc("POST /community/memberAddMode/{instance}", s.handleCommunityMemberAddMode)
+	s.mux.HandleFunc("POST /community/toggleEphemeral/{instance}", s.handleCommunityToggleEphemeral)
+	s.mux.HandleFunc("POST /community/settingUpdate/{instance}", s.handleCommunitySettingUpdate)
+	s.mux.HandleFunc("DELETE /community/leave/{instance}", s.handleCommunityLeave)
+
+	// newsletter admin / metadata
+	s.mux.HandleFunc("GET /newsletter/findNewsletter/{instance}", s.handleNewsletterFind)
+	s.mux.HandleFunc("POST /newsletter/unfollow/{instance}", s.handleNewsletterUnfollow)
+	s.mux.HandleFunc("POST /newsletter/mute/{instance}", s.handleNewsletterMute)
+	s.mux.HandleFunc("POST /newsletter/unmute/{instance}", s.handleNewsletterUnmute)
+	s.mux.HandleFunc("POST /newsletter/updateName/{instance}", s.handleNewsletterUpdateName)
+	s.mux.HandleFunc("POST /newsletter/updateDescription/{instance}", s.handleNewsletterUpdateDescription)
+	s.mux.HandleFunc("POST /newsletter/updatePicture/{instance}", s.handleNewsletterUpdatePicture)
+	s.mux.HandleFunc("POST /newsletter/reactionMode/{instance}", s.handleNewsletterReactionMode)
+	s.mux.HandleFunc("GET /newsletter/fetchMessages/{instance}", s.handleNewsletterFetchMessages)
+	s.mux.HandleFunc("GET /newsletter/adminCount/{instance}", s.handleNewsletterAdminCount)
+	s.mux.HandleFunc("POST /newsletter/changeOwner/{instance}", s.handleNewsletterChangeOwner)
+	s.mux.HandleFunc("POST /newsletter/demote/{instance}", s.handleNewsletterDemote)
+	s.mux.HandleFunc("POST /newsletter/subscribeUpdates/{instance}", s.handleNewsletterSubscribe)
+
 	// labels
 	s.mux.HandleFunc("GET /label/findLabels/{instance}", s.handleFindLabels)
 	s.mux.HandleFunc("POST /label/handleLabel/{instance}", s.handleHandleLabel)

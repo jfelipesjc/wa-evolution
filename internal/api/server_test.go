@@ -82,6 +82,59 @@ type fakeBackend struct {
 	clears        []string
 	chatDeletes   []string
 	resyncs       []sentResync
+
+	// communities
+	communityInfo        *wa.GroupInfo
+	communityCreates     []sentCommunityCreate
+	communitySubjects    [][2]string
+	communityDescs       [][2]string
+	communityLinks       []sentCommunityLink
+	linkedGroups         []wa.GroupLinkInfo
+	communityReqs        []wa.CommunityMembershipRequest
+	communityReqUpdates  []sentCommunityPart
+	communityPartUpdates []sentCommunityPart
+	communityModes       []sentCommunityMode
+	communityEphemerals  []sentCommunityEphemeral
+	lastCommunitySetting string
+	communityLeaves      []string
+
+	// newsletter admin
+	newsletterInfo             *wa.NewsletterInfo
+	newsletterMsgs             []wa.NewsletterMessage
+	newsletterAdminCnt         int
+	newsletterSubDuration      string
+	newsletterUnfollows        []string
+	newsletterMutes            []sentNewsletterMute
+	newsletterUpdates          []sentNewsletterUpdate
+	lastNewsletterReactionMode string
+	newsletterOwnerChanges     []sentNewsletterUser
+	newsletterDemotes          []sentNewsletterUser
+	newsletterSubscribes       []string
+	newsletterFetches          []sentNewsletterFetch
+}
+
+type sentNewsletterFetch struct {
+	jid   string
+	count int
+	since int64
+}
+type sentNewsletterMute struct {
+	jid  string
+	mute bool
+}
+type sentNewsletterUpdate struct{ jid, field, value string }
+type sentNewsletterUser struct{ jid, userJid string }
+
+type sentCommunityCreate struct{ subject, description string }
+type sentCommunityLink struct{ communityJID, groupJID, op string }
+type sentCommunityPart struct {
+	communityJID, action string
+	participants         []string
+}
+type sentCommunityMode struct{ communityJID, kind, mode string }
+type sentCommunityEphemeral struct {
+	communityJID string
+	expiration   int
 }
 
 type sentPin struct {

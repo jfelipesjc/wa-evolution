@@ -198,6 +198,72 @@ type Backend interface {
 	// ResyncAppState fetches and applies the server's app-state for the given
 	// collections (fresh requests a full snapshot).
 	ResyncAppState(ctx context.Context, name string, collections []string, fresh bool) error
+
+	// --- communities ---
+
+	// CommunityCreate creates a community and returns its metadata.
+	CommunityCreate(ctx context.Context, name, subject, description string) (*wa.GroupInfo, error)
+	// CommunityMetadata returns a community's metadata (including participants).
+	CommunityMetadata(ctx context.Context, name, communityJID string) (*wa.GroupInfo, error)
+	// CommunityUpdateSubject sets a community's subject (name).
+	CommunityUpdateSubject(ctx context.Context, name, communityJID, subject string) error
+	// CommunityUpdateDescription sets a community's description.
+	CommunityUpdateDescription(ctx context.Context, name, communityJID, description string) error
+	// CommunityLinkGroups links one or more groups into a community, returning a
+	// per-group outcome.
+	CommunityLinkGroups(ctx context.Context, name, communityJID string, groupJIDs []string) ([]CommunityLinkResult, error)
+	// CommunityUnlinkGroup unlinks a group from a community.
+	CommunityUnlinkGroup(ctx context.Context, name, communityJID, groupJID string) error
+	// CommunityLinkedGroups lists the groups linked into a community.
+	CommunityLinkedGroups(ctx context.Context, name, communityJID string) ([]wa.GroupLinkInfo, error)
+	// CommunityRequestList lists pending membership (join) requests for a community.
+	CommunityRequestList(ctx context.Context, name, communityJID string) ([]wa.CommunityMembershipRequest, error)
+	// CommunityRequestUpdate approves/rejects pending membership requests.
+	CommunityRequestUpdate(ctx context.Context, name, communityJID string, participants []string, action string) ([]ParticipantResult, error)
+	// CommunityParticipantsUpdate adds/removes/promotes/demotes community members.
+	CommunityParticipantsUpdate(ctx context.Context, name, communityJID string, participants []string, action string) ([]ParticipantResult, error)
+	// CommunityJoinApprovalMode toggles join-approval (on|off).
+	CommunityJoinApprovalMode(ctx context.Context, name, communityJID, mode string) error
+	// CommunityMemberAddMode sets who can add members (admin_add|all_member_add).
+	CommunityMemberAddMode(ctx context.Context, name, communityJID, mode string) error
+	// CommunityToggleEphemeral sets disappearing-message duration (seconds, 0 = off).
+	CommunityToggleEphemeral(ctx context.Context, name, communityJID string, expiration int) error
+	// CommunitySettingUpdate changes a community setting (lib setting tag).
+	CommunitySettingUpdate(ctx context.Context, name, communityJID, setting string) error
+	// CommunityLeave leaves a community.
+	CommunityLeave(ctx context.Context, name, communityJID string) error
+
+	// --- newsletter admin / metadata ---
+
+	// NewsletterMetadata returns a channel's metadata by JID or invite key.
+	// keyType is "jid" or "invite".
+	NewsletterMetadata(ctx context.Context, name, key, keyType string) (*wa.NewsletterInfo, error)
+	// NewsletterUnfollow unfollows a channel.
+	NewsletterUnfollow(ctx context.Context, name, jid string) error
+	// NewsletterMute mutes (mute=true) or unmutes (mute=false) a channel.
+	NewsletterMute(ctx context.Context, name, jid string, mute bool) error
+	// NewsletterUpdateName sets a channel's name; returns the updated metadata.
+	NewsletterUpdateName(ctx context.Context, name, jid, newName string) (*wa.NewsletterInfo, error)
+	// NewsletterUpdateDescription sets a channel's description; returns the updated metadata.
+	NewsletterUpdateDescription(ctx context.Context, name, jid, desc string) (*wa.NewsletterInfo, error)
+	// NewsletterUpdatePicture sets a channel's picture (base64 jpeg, "" removes);
+	// returns the updated metadata.
+	NewsletterUpdatePicture(ctx context.Context, name, jid, picture string) (*wa.NewsletterInfo, error)
+	// NewsletterReactionMode sets the channel-wide reaction policy
+	// (ALL|BASIC|NONE|BLOCKLIST).
+	NewsletterReactionMode(ctx context.Context, name, jid, mode string) error
+	// NewsletterFetchMessages fetches up to count messages since the given server
+	// id (0 = newest).
+	NewsletterFetchMessages(ctx context.Context, name, jid string, count int, since int64) ([]wa.NewsletterMessage, error)
+	// NewsletterAdminCount returns the number of admins on a channel.
+	NewsletterAdminCount(ctx context.Context, name, jid string) (int, error)
+	// NewsletterChangeOwner transfers channel ownership to newOwnerJid.
+	NewsletterChangeOwner(ctx context.Context, name, jid, newOwnerJid string) error
+	// NewsletterDemote demotes an admin (userJid) back to subscriber.
+	NewsletterDemote(ctx context.Context, name, jid, userJid string) error
+	// NewsletterSubscribeLiveUpdates subscribes to a channel's live updates and
+	// returns the granted duration.
+	NewsletterSubscribeLiveUpdates(ctx context.Context, name, jid string) (string, error)
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.
