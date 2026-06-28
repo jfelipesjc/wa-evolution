@@ -368,3 +368,108 @@ func TestNewsletterSubscribe_Validation(t *testing.T) {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }
+
+func TestNewsletterDelete(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "DELETE", "/newsletter/delete/bot1?newsletterJid=1234@newsletter", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.newsletterDeletes) != 1 || fb.newsletterDeletes[0] != "1234@newsletter" {
+		t.Fatalf("deletes = %+v", fb.newsletterDeletes)
+	}
+}
+
+func TestNewsletterDelete_MissingJID(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "DELETE", "/newsletter/delete/bot1", testKey, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestNewsletterDelete_BodyFallback(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	// DELETE with no query param but a JSON body carrying the JID (documented fallback).
+	rec := do(t, h, "DELETE", "/newsletter/delete/bot1", testKey, newsletterJidReq{NewsletterJid: "5678@newsletter"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.newsletterDeletes) != 1 || fb.newsletterDeletes[0] != "5678@newsletter" {
+		t.Fatalf("deletes = %+v", fb.newsletterDeletes)
+	}
+}
+
+func TestNewsletterSubscribers(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.newsletterSubCount = 128
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/newsletter/subscribers/bot1?newsletterJid=1234@newsletter", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out map[string]int
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if out["subscribers"] != 128 {
+		t.Fatalf("subscribers = %d, want 128", out["subscribers"])
+	}
+}
+
+func TestNewsletterSubscribers_MissingJID(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/newsletter/subscribers/bot1", testKey, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestNewsletterReactMessage(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/reactMessage/bot1", testKey, newsletterReactReq{NewsletterJid: "1234@newsletter", ServerID: "100", Reaction: "👍"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.newsletterReacts) != 1 || fb.newsletterReacts[0].serverID != "100" || fb.newsletterReacts[0].reaction != "👍" {
+		t.Fatalf("reacts = %+v", fb.newsletterReacts)
+	}
+}
+
+// An empty reaction removes the reaction, so it must be accepted (200) and reach
+// the backend with reaction=="".
+func TestNewsletterReactMessage_EmptyRemoves(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/reactMessage/bot1", testKey, newsletterReactReq{NewsletterJid: "1234@newsletter", ServerID: "100", Reaction: ""})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (empty reaction removes); body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.newsletterReacts) != 1 || fb.newsletterReacts[0].reaction != "" {
+		t.Fatalf("reacts = %+v, want one react with empty reaction", fb.newsletterReacts)
+	}
+}
+
+func TestNewsletterReactMessage_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/reactMessage/bot1", testKey, newsletterReactReq{ServerID: "100", Reaction: "👍"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no newsletterJid)", rec.Code)
+	}
+	rec = do(t, h, "POST", "/newsletter/reactMessage/bot1", testKey, newsletterReactReq{NewsletterJid: "1234@newsletter", Reaction: "👍"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no serverId)", rec.Code)
+	}
+}

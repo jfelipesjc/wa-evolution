@@ -399,6 +399,37 @@ func TestCommunitySettingUpdate(t *testing.T) {
 	}
 }
 
+func TestCommunityFetchAllParticipating(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.communityParticipating = []wa.GroupLinkInfo{{JID: "120363@g.us", Subject: "Bairro"}}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/community/fetchAllParticipating/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []communityLinkRecord
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 1 || out[0].JID != "120363@g.us" || out[0].Subject != "Bairro" {
+		t.Fatalf("participating = %+v", out)
+	}
+}
+
+func TestCommunityFetchAllParticipating_Empty(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	// communityParticipating left nil — the handler must still serialize a JSON
+	// array ([]) rather than null when there are no communities.
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/community/fetchAllParticipating/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.Len() == 0 || rec.Body.Bytes()[0] != '[' {
+		t.Fatalf("empty list must serialize as a JSON array, got %q", rec.Body.String())
+	}
+}
+
 func TestCommunityLeave(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")

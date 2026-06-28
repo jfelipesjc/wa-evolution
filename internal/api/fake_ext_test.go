@@ -342,6 +342,10 @@ func (f *fakeBackend) CommunityLeave(ctx context.Context, name, communityJID str
 	return nil
 }
 
+func (f *fakeBackend) CommunityFetchAllParticipating(ctx context.Context, name string) ([]wa.GroupLinkInfo, error) {
+	return f.communityParticipating, nil
+}
+
 // --- newsletter admin ---
 
 func (f *fakeBackend) newsletterInfoOr(jid string) *wa.NewsletterInfo {
@@ -429,4 +433,22 @@ func (f *fakeBackend) NewsletterSubscribeLiveUpdates(ctx context.Context, name, 
 	defer f.mu.Unlock()
 	f.newsletterSubscribes = append(f.newsletterSubscribes, jid)
 	return f.newsletterSubDuration, nil
+}
+
+func (f *fakeBackend) NewsletterDelete(ctx context.Context, name, jid string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.newsletterDeletes = append(f.newsletterDeletes, jid)
+	return nil
+}
+
+func (f *fakeBackend) NewsletterSubscriberCount(ctx context.Context, name, jid string) (int, error) {
+	return f.newsletterSubCount, nil
+}
+
+func (f *fakeBackend) NewsletterReactMessage(ctx context.Context, name, jid, serverID, reaction string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.newsletterReacts = append(f.newsletterReacts, sentNewsletterReact{jid, serverID, reaction})
+	return nil
 }

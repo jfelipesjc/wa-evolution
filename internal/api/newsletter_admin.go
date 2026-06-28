@@ -53,6 +53,12 @@ type newsletterUserReq struct {
 	UserJid       string `json:"userJid"`
 }
 
+type newsletterReactReq struct {
+	NewsletterJid string `json:"newsletterJid"`
+	ServerID      string `json:"serverId"`
+	Reaction      string `json:"reaction"`
+}
+
 // --- response shapes (camelCase, mapped from wa.* types) ---
 
 type newsletterResp struct {
@@ -402,6 +408,71 @@ func (s *Server) handleNewsletterSubscribe(w http.ResponseWriter, r *http.Reques
 	s.writeJSON(w, http.StatusOK, map[string]string{"duration": dur})
 }
 
+// handleNewsletterDelete: DELETE /newsletter/delete/{instance}?newsletterJid=.
+//
+// IRREVERSIBLE: this permanently deactivates (deletes) the channel — there is no
+// undo and existing subscribers lose it. The JID arrives via the newsletterJid
+// query param (DELETE carries no body by convention) with an optional JSON body
+// fallback.
+func (s *Server) handleNewsletterDelete(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	// JID-only body: tolerate an empty/absent body so the JID may arrive via query.
+	var req newsletterJidReq
+	s.tryDecodeJSON(r, &req)
+	jid := newsletterJidFrom(r, req.NewsletterJid, req.JID)
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "newsletterJid is required")
+		return
+	}
+	if err := s.backend.NewsletterDelete(r.Context(), inst, normalizeJID(jid)); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleNewsletterSubscribers: GET /newsletter/subscribers/{instance}?newsletterJid=.
+func (s *Server) handleNewsletterSubscribers(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	jid := newsletterJidFrom(r, "", "")
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "newsletterJid query param is required")
+		return
+	}
+	n, err := s.backend.NewsletterSubscriberCount(r.Context(), inst, normalizeJID(jid))
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]int{"subscribers": n})
+}
+
+// handleNewsletterReactMessage: POST /newsletter/reactMessage/{instance}
+// {newsletterJid, serverId, reaction}. reaction is the emoji to apply; an empty
+// reaction removes the existing reaction on the message.
+func (s *Server) handleNewsletterReactMessage(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	var req newsletterReactReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	jid := newsletterJidFrom(r, req.NewsletterJid, "")
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "newsletterJid is required")
+		return
+	}
+	if req.ServerID == "" {
+		s.writeError(w, http.StatusBadRequest, "serverId is required")
+		return
+	}
+	// reaction=="" is intentional: it removes the existing reaction.
+	if err := s.backend.NewsletterReactMessage(r.Context(), inst, normalizeJID(jid), req.ServerID, req.Reaction); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
 // --- ManagerBackend implementations ---
 
 func (b *ManagerBackend) NewsletterMetadata(ctx context.Context, name, key, keyType string) (*wa.NewsletterInfo, error) {
@@ -512,4 +583,28 @@ func (b *ManagerBackend) NewsletterSubscribeLiveUpdates(ctx context.Context, nam
 		return "", nil
 	}
 	return sub.Duration, nil
+}
+
+func (b *ManagerBackend) NewsletterDelete(ctx context.Context, name, jid string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.NewsletterDelete(ctx, jid)
+}
+
+func (b *ManagerBackend) NewsletterSubscriberCount(ctx context.Context, name, jid string) (int, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return 0, err
+	}
+	return c.NewsletterSubscriberCount(ctx, jid)
+}
+
+func (b *ManagerBackend) NewsletterReactMessage(ctx context.Context, name, jid, serverID, reaction string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.NewsletterReactMessage(ctx, jid, serverID, reaction)
 }

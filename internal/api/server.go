@@ -209,6 +209,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /community/toggleEphemeral/{instance}", s.handleCommunityToggleEphemeral)
 	s.mux.HandleFunc("POST /community/settingUpdate/{instance}", s.handleCommunitySettingUpdate)
 	s.mux.HandleFunc("DELETE /community/leave/{instance}", s.handleCommunityLeave)
+	s.mux.HandleFunc("GET /community/fetchAllParticipating/{instance}", s.handleCommunityFetchAllParticipating)
 
 	// newsletter admin / metadata
 	s.mux.HandleFunc("GET /newsletter/findNewsletter/{instance}", s.handleNewsletterFind)
@@ -224,6 +225,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /newsletter/changeOwner/{instance}", s.handleNewsletterChangeOwner)
 	s.mux.HandleFunc("POST /newsletter/demote/{instance}", s.handleNewsletterDemote)
 	s.mux.HandleFunc("POST /newsletter/subscribeUpdates/{instance}", s.handleNewsletterSubscribe)
+	s.mux.HandleFunc("DELETE /newsletter/delete/{instance}", s.handleNewsletterDelete)
+	s.mux.HandleFunc("GET /newsletter/subscribers/{instance}", s.handleNewsletterSubscribers)
+	s.mux.HandleFunc("POST /newsletter/reactMessage/{instance}", s.handleNewsletterReactMessage)
 
 	// labels
 	s.mux.HandleFunc("GET /label/findLabels/{instance}", s.handleFindLabels)

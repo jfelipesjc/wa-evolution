@@ -529,6 +529,23 @@ func (s *Server) handleCommunitySettingUpdate(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
 }
 
+// handleCommunityFetchAllParticipating: GET /community/fetchAllParticipating/{instance}.
+// Lists the communities the account participates in; takes no parameters and
+// returns the same camelCase [{jid,subject}] shape as linkedGroups.
+func (s *Server) handleCommunityFetchAllParticipating(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	links, err := s.backend.CommunityFetchAllParticipating(r.Context(), inst)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	out := make([]communityLinkRecord, 0, len(links))
+	for _, l := range links {
+		out = append(out, communityLinkRecord{JID: l.JID, Subject: l.Subject})
+	}
+	s.writeJSON(w, http.StatusOK, out)
+}
+
 // handleCommunityLeave: DELETE /community/leave/{instance}?communityJid=.
 func (s *Server) handleCommunityLeave(w http.ResponseWriter, r *http.Request) {
 	inst := r.PathValue("instance")
@@ -689,4 +706,12 @@ func (b *ManagerBackend) CommunityLeave(ctx context.Context, name, communityJID 
 		return err
 	}
 	return c.CommunityLeave(ctx, communityJID)
+}
+
+func (b *ManagerBackend) CommunityFetchAllParticipating(ctx context.Context, name string) ([]wa.GroupLinkInfo, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return nil, err
+	}
+	return c.CommunityFetchAllParticipating(ctx)
 }

@@ -84,19 +84,20 @@ type fakeBackend struct {
 	resyncs       []sentResync
 
 	// communities
-	communityInfo        *wa.GroupInfo
-	communityCreates     []sentCommunityCreate
-	communitySubjects    [][2]string
-	communityDescs       [][2]string
-	communityLinks       []sentCommunityLink
-	linkedGroups         []wa.GroupLinkInfo
-	communityReqs        []wa.CommunityMembershipRequest
-	communityReqUpdates  []sentCommunityPart
-	communityPartUpdates []sentCommunityPart
-	communityModes       []sentCommunityMode
-	communityEphemerals  []sentCommunityEphemeral
-	lastCommunitySetting string
-	communityLeaves      []string
+	communityInfo          *wa.GroupInfo
+	communityCreates       []sentCommunityCreate
+	communitySubjects      [][2]string
+	communityDescs         [][2]string
+	communityLinks         []sentCommunityLink
+	linkedGroups           []wa.GroupLinkInfo
+	communityReqs          []wa.CommunityMembershipRequest
+	communityReqUpdates    []sentCommunityPart
+	communityPartUpdates   []sentCommunityPart
+	communityModes         []sentCommunityMode
+	communityEphemerals    []sentCommunityEphemeral
+	lastCommunitySetting   string
+	communityLeaves        []string
+	communityParticipating []wa.GroupLinkInfo
 
 	// newsletter admin
 	newsletterInfo             *wa.NewsletterInfo
@@ -111,7 +112,12 @@ type fakeBackend struct {
 	newsletterDemotes          []sentNewsletterUser
 	newsletterSubscribes       []string
 	newsletterFetches          []sentNewsletterFetch
+	newsletterDeletes          []string
+	newsletterSubCount         int
+	newsletterReacts           []sentNewsletterReact
 }
+
+type sentNewsletterReact struct{ jid, serverID, reaction string }
 
 type sentNewsletterFetch struct {
 	jid   string

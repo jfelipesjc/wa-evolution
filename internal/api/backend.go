@@ -232,6 +232,9 @@ type Backend interface {
 	CommunitySettingUpdate(ctx context.Context, name, communityJID, setting string) error
 	// CommunityLeave leaves a community.
 	CommunityLeave(ctx context.Context, name, communityJID string) error
+	// CommunityFetchAllParticipating lists the communities the account participates
+	// in (jid + subject per community).
+	CommunityFetchAllParticipating(ctx context.Context, name string) ([]wa.GroupLinkInfo, error)
 
 	// --- newsletter admin / metadata ---
 
@@ -264,6 +267,12 @@ type Backend interface {
 	// NewsletterSubscribeLiveUpdates subscribes to a channel's live updates and
 	// returns the granted duration.
 	NewsletterSubscribeLiveUpdates(ctx context.Context, name, jid string) (string, error)
+	// NewsletterDelete permanently deactivates (deletes) a channel. IRREVERSIBLE.
+	NewsletterDelete(ctx context.Context, name, jid string) error
+	// NewsletterSubscriberCount returns a channel's subscriber count.
+	NewsletterSubscriberCount(ctx context.Context, name, jid string) (int, error)
+	// NewsletterReactMessage reacts to a channel message (emoji ""=remove).
+	NewsletterReactMessage(ctx context.Context, name, jid, serverID, reaction string) error
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.
