@@ -331,12 +331,11 @@ func TestGroupUpdateSetting(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")
 	h := newTestServer(t, fb)
-	// Evolution action names must map to the lib's setting names before reaching
-	// the backend: announcement->announce, not_announcement->not_announce,
-	// locked/unlocked pass through unchanged.
+	// Evolution action names are passed verbatim as the literal wire tags
+	// (announcement/not_announcement/locked/unlocked); the lib accepts them.
 	for _, tc := range []struct{ action, want string }{
-		{"announcement", "announce"},
-		{"not_announcement", "not_announce"},
+		{"announcement", "announcement"},
+		{"not_announcement", "not_announcement"},
 		{"locked", "locked"},
 		{"unlocked", "unlocked"},
 	} {

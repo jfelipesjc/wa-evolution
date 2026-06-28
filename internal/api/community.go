@@ -493,8 +493,8 @@ func (s *Server) handleCommunityToggleEphemeral(w http.ResponseWriter, r *http.R
 }
 
 // handleCommunitySettingUpdate: POST /community/settingUpdate/{instance} {communityJid, action}.
-// action is announcement|not_announcement|locked|unlocked; it is mapped to the
-// library's setting tag exactly as the group equivalent (announcement->announce).
+// action is announcement|not_announcement|locked|unlocked and is passed to the
+// library verbatim — these are the literal wire tags the server expects.
 func (s *Server) handleCommunitySettingUpdate(w http.ResponseWriter, r *http.Request) {
 	inst := r.PathValue("instance")
 	var req communitySettingReq
@@ -512,17 +512,7 @@ func (s *Server) handleCommunitySettingUpdate(w http.ResponseWriter, r *http.Req
 		s.writeError(w, http.StatusBadRequest, "communityJid is required")
 		return
 	}
-	// Map Evolution action names to the wa-go setting tags (mirrors the group
-	// handler: announcement/not_announcement -> announce/not_announce; locked and
-	// unlocked pass through unchanged).
-	setting := req.Action
-	switch setting {
-	case "announcement":
-		setting = "announce"
-	case "not_announcement":
-		setting = "not_announce"
-	}
-	if err := s.backend.CommunitySettingUpdate(r.Context(), inst, normalizeJID(jid), setting); err != nil {
+	if err := s.backend.CommunitySettingUpdate(r.Context(), inst, normalizeJID(jid), req.Action); err != nil {
 		s.writeSendError(w, err)
 		return
 	}

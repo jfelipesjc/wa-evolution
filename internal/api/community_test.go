@@ -377,11 +377,11 @@ func TestCommunitySettingUpdate(t *testing.T) {
 	fb := newFakeBackend()
 	_ = fb.Create("bot1")
 	h := newTestServer(t, fb)
-	// action names must map to the lib's setting tags before reaching the backend,
-	// identical to the group equivalent.
+	// action names are passed verbatim — the literal wire tags the server expects
+	// (the lib accepts announcement/not_announcement/locked/unlocked directly).
 	for _, tc := range []struct{ action, want string }{
-		{"announcement", "announce"},
-		{"not_announcement", "not_announce"},
+		{"announcement", "announcement"},
+		{"not_announcement", "not_announcement"},
 		{"locked", "locked"},
 		{"unlocked", "unlocked"},
 	} {
