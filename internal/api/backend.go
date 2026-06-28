@@ -235,6 +235,12 @@ type Backend interface {
 	// CommunityFetchAllParticipating lists the communities the account participates
 	// in (jid + subject per community).
 	CommunityFetchAllParticipating(ctx context.Context, name string) ([]wa.GroupLinkInfo, error)
+	// CommunityCreateGroup creates a new sub-group under a community and returns
+	// its metadata.
+	CommunityCreateGroup(ctx context.Context, name, communityJID, subject string, participants []string) (*wa.GroupInfo, error)
+	// CommunityLinkedGroupsParticipants lists the JIDs of every participant across
+	// a community's linked sub-groups.
+	CommunityLinkedGroupsParticipants(ctx context.Context, name, communityJID string) ([]string, error)
 
 	// --- newsletter admin / metadata ---
 
@@ -256,8 +262,8 @@ type Backend interface {
 	// (ALL|BASIC|NONE|BLOCKLIST).
 	NewsletterReactionMode(ctx context.Context, name, jid, mode string) error
 	// NewsletterFetchMessages fetches up to count messages since the given server
-	// id (0 = newest).
-	NewsletterFetchMessages(ctx context.Context, name, jid string, count int, since int64) ([]wa.NewsletterMessage, error)
+	// id (0 = newest), starting after the given server id (0 = no cursor).
+	NewsletterFetchMessages(ctx context.Context, name, jid string, count int, since int64, after int64) ([]wa.NewsletterMessage, error)
 	// NewsletterAdminCount returns the number of admins on a channel.
 	NewsletterAdminCount(ctx context.Context, name, jid string) (int, error)
 	// NewsletterChangeOwner transfers channel ownership to newOwnerJid.
@@ -276,6 +282,12 @@ type Backend interface {
 	// SendNewsletterText posts a text message to a channel and returns its
 	// server-assigned id (server_id).
 	SendNewsletterText(ctx context.Context, name, jid, text string) (string, error)
+	// NewsletterSubscribed lists the channels the account follows or owns.
+	NewsletterSubscribed(ctx context.Context, name string) ([]*wa.NewsletterInfo, error)
+	// AcceptTOSNotice accepts the WhatsApp Channels TOS notice.
+	AcceptTOSNotice(ctx context.Context, name string) error
+	// NewsletterMarkViewed bumps the view counter of one or more channel messages.
+	NewsletterMarkViewed(ctx context.Context, name, jid string, serverIDs []string) error
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.

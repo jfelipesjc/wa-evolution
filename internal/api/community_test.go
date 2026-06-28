@@ -452,3 +452,84 @@ func TestCommunityLeave_MissingJID(t *testing.T) {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }
+
+func TestCommunityCreateGroup(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/community/createGroup/bot1", testKey, communityCreateGroupReq{
+		CommunityJid: "120363@g.us", Subject: "Sub", Participants: []string{"5512999"},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var cr communityResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &cr)
+	if cr.Subject != "Sub" {
+		t.Fatalf("resp = %+v", cr)
+	}
+	if len(fb.communitySubGroups) != 1 || fb.communitySubGroups[0].communityJID != "120363@g.us" ||
+		fb.communitySubGroups[0].subject != "Sub" || fb.communitySubGroups[0].participants[0] != "5512999@s.whatsapp.net" {
+		t.Fatalf("subGroups = %+v", fb.communitySubGroups)
+	}
+}
+
+func TestCommunityCreateGroup_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/community/createGroup/bot1", testKey, communityCreateGroupReq{Subject: "Sub"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no communityJid)", rec.Code)
+	}
+	rec = do(t, h, "POST", "/community/createGroup/bot1", testKey, communityCreateGroupReq{CommunityJid: "120363@g.us"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no subject)", rec.Code)
+	}
+}
+
+func TestCommunityLinkedGroupsParticipants(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.communityGroupParts = []string{"5512@s.whatsapp.net", "5513@s.whatsapp.net"}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/community/linkedGroupsParticipants/bot1?communityJid=120363@g.us", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Participants []string `json:"participants"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out.Participants) != 2 || out.Participants[0] != "5512@s.whatsapp.net" {
+		t.Fatalf("participants = %+v", out.Participants)
+	}
+}
+
+func TestCommunityLinkedGroupsParticipants_MissingJID(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/community/linkedGroupsParticipants/bot1", testKey, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestCommunityLinkedGroupsParticipants_EmptySerializesArray(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/community/linkedGroupsParticipants/bot1?communityJid=120363@g.us", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	// participants must serialize as [] (not null) when there are none.
+	var out struct {
+		Participants []string `json:"participants"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if out.Participants == nil {
+		t.Fatalf("participants must be [] not null; body=%s", rec.Body.String())
+	}
+}

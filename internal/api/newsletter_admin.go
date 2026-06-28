@@ -64,6 +64,11 @@ type newsletterSendTextReq struct {
 	Text          string `json:"text"`
 }
 
+type newsletterMarkViewedReq struct {
+	NewsletterJid string   `json:"newsletterJid"`
+	ServerIds     []string `json:"serverIds"`
+}
+
 // --- response shapes (camelCase, mapped from wa.* types) ---
 
 type newsletterResp struct {
@@ -296,7 +301,7 @@ func (s *Server) handleNewsletterReactionMode(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
 }
 
-// handleNewsletterFetchMessages: GET /newsletter/fetchMessages/{instance}?newsletterJid=&count=&since=.
+// handleNewsletterFetchMessages: GET /newsletter/fetchMessages/{instance}?newsletterJid=&count=&since=&after=.
 func (s *Server) handleNewsletterFetchMessages(w http.ResponseWriter, r *http.Request) {
 	inst := r.PathValue("instance")
 	jid := newsletterJidFrom(r, "", "")
@@ -316,7 +321,13 @@ func (s *Server) handleNewsletterFetchMessages(w http.ResponseWriter, r *http.Re
 			since = n
 		}
 	}
-	msgs, err := s.backend.NewsletterFetchMessages(r.Context(), inst, normalizeJID(jid), count, since)
+	var after int64
+	if v := r.URL.Query().Get("after"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			after = n
+		}
+	}
+	msgs, err := s.backend.NewsletterFetchMessages(r.Context(), inst, normalizeJID(jid), count, since, after)
 	if err != nil {
 		s.writeSendError(w, err)
 		return
@@ -504,6 +515,64 @@ func (s *Server) handleNewsletterSendText(w http.ResponseWriter, r *http.Request
 	s.writeJSON(w, http.StatusCreated, map[string]string{"serverId": serverID, "status": "PENDING"})
 }
 
+// handleNewsletterSubscribed: GET /newsletter/subscribed/{instance}. Lists the
+// channels the account follows or owns, as an array of newsletter responses.
+func (s *Server) handleNewsletterSubscribed(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	infos, err := s.backend.NewsletterSubscribed(r.Context(), inst)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	out := make([]newsletterResp, 0, len(infos))
+	for _, info := range infos {
+		out = append(out, newsletterToResp(info))
+	}
+	s.writeJSON(w, http.StatusOK, out)
+}
+
+// handleNewsletterAcceptTOS: POST /newsletter/acceptTOS/{instance}. Accepts the
+// WhatsApp Channels TOS notice (required once before creating/following channels).
+func (s *Server) handleNewsletterAcceptTOS(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	if err := s.backend.AcceptTOSNotice(r.Context(), inst); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
+// handleNewsletterMarkViewed: POST /newsletter/markViewed/{instance}
+// {newsletterJid, serverIds[]}. Bumps the view counter of the given channel
+// messages (serverIds must be non-empty).
+func (s *Server) handleNewsletterMarkViewed(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	var req newsletterMarkViewedReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	jid := newsletterJidFrom(r, req.NewsletterJid, "")
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "newsletterJid is required")
+		return
+	}
+	ids := make([]string, 0, len(req.ServerIds))
+	for _, id := range req.ServerIds {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		s.writeError(w, http.StatusBadRequest, "serverIds is required")
+		return
+	}
+	if err := s.backend.NewsletterMarkViewed(r.Context(), inst, normalizeJID(jid), ids); err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
+}
+
 // --- ManagerBackend implementations ---
 
 func (b *ManagerBackend) NewsletterMetadata(ctx context.Context, name, key, keyType string) (*wa.NewsletterInfo, error) {
@@ -569,12 +638,12 @@ func (b *ManagerBackend) NewsletterReactionMode(ctx context.Context, name, jid, 
 	return c.NewsletterReactionMode(ctx, jid, wa.NewsletterReactionMode(strings.ToUpper(mode)))
 }
 
-func (b *ManagerBackend) NewsletterFetchMessages(ctx context.Context, name, jid string, count int, since int64) ([]wa.NewsletterMessage, error) {
+func (b *ManagerBackend) NewsletterFetchMessages(ctx context.Context, name, jid string, count int, since int64, after int64) ([]wa.NewsletterMessage, error) {
 	c, err := b.liveClient(name)
 	if err != nil {
 		return nil, err
 	}
-	return c.NewsletterFetchMessages(ctx, jid, count, since)
+	return c.NewsletterFetchMessages(ctx, jid, count, since, after)
 }
 
 func (b *ManagerBackend) NewsletterAdminCount(ctx context.Context, name, jid string) (int, error) {
@@ -646,4 +715,28 @@ func (b *ManagerBackend) SendNewsletterText(ctx context.Context, name, jid, text
 		return "", err
 	}
 	return c.SendNewsletterText(ctx, jid, text)
+}
+
+func (b *ManagerBackend) NewsletterSubscribed(ctx context.Context, name string) ([]*wa.NewsletterInfo, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return nil, err
+	}
+	return c.NewsletterSubscribed(ctx)
+}
+
+func (b *ManagerBackend) AcceptTOSNotice(ctx context.Context, name string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.AcceptTOSNotice(ctx)
+}
+
+func (b *ManagerBackend) NewsletterMarkViewed(ctx context.Context, name, jid string, serverIDs []string) error {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return err
+	}
+	return c.NewsletterMarkViewed(ctx, jid, serverIDs)
 }

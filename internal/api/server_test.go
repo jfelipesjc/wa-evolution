@@ -98,6 +98,9 @@ type fakeBackend struct {
 	lastCommunitySetting   string
 	communityLeaves        []string
 	communityParticipating []wa.GroupLinkInfo
+	communitySubGroups     []sentCommunityCreateGroup
+	communitySubGroupInfo  *wa.GroupInfo
+	communityGroupParts    []string
 
 	// newsletter admin
 	newsletterInfo             *wa.NewsletterInfo
@@ -116,6 +119,9 @@ type fakeBackend struct {
 	newsletterSubCount         int
 	newsletterReacts           []sentNewsletterReact
 	newsletterSends            []sentNewsletterSend
+	newsletterSubscribed       []*wa.NewsletterInfo
+	acceptTOSCount             int
+	newsletterMarkViewed       []sentNewsletterMarkViewed
 }
 
 type sentNewsletterReact struct{ jid, serverID, reaction string }
@@ -125,6 +131,7 @@ type sentNewsletterFetch struct {
 	jid   string
 	count int
 	since int64
+	after int64
 }
 type sentNewsletterMute struct {
 	jid  string
@@ -134,6 +141,14 @@ type sentNewsletterUpdate struct{ jid, field, value string }
 type sentNewsletterUser struct{ jid, userJid string }
 
 type sentCommunityCreate struct{ subject, description string }
+type sentCommunityCreateGroup struct {
+	communityJID, subject string
+	participants          []string
+}
+type sentNewsletterMarkViewed struct {
+	jid       string
+	serverIDs []string
+}
 type sentCommunityLink struct{ communityJID, groupJID, op string }
 type sentCommunityPart struct {
 	communityJID, action string

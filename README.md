@@ -92,7 +92,7 @@ curl -X POST localhost:8080/message/sendText/chip1 \
 A built-in web dashboard is served at **`/manager`** (no auth) for eyeballing
 instance state and QR codes.
 
-## API surface (~102 routes)
+## API surface (~127 routes)
 
 Evolution-shaped paths, grouped by area. All take the `apikey` header; the
 `{instance}` segment selects the session.
@@ -116,17 +116,19 @@ Evolution-shaped paths, grouped by area. All take the `apikey` header; the
 - **Profile & privacy** — `updateProfileName`, `updateProfileStatus`,
   `updateProfilePicture`, `removeProfilePicture`, `fetchPrivacySettings`,
   `updatePrivacySettings`, `updateBlockStatus`
-- **Communities** — `create`, `findCommunity`, `fetchAllParticipating`,
-  `updateSubject`, `updateDescription`, `linkGroup`, `unlinkGroup`,
-  `linkedGroups`, `requestList`, `requestUpdate` (approve/reject),
-  `updateParticipant` (add/remove/promote/demote), `joinApprovalMode`,
-  `memberAddMode`, `toggleEphemeral`, `settingUpdate`, `leave`
-  (all under `/community/<op>/{i}`)
+- **Communities** — `create`, `createGroup` (new subgroup), `findCommunity`,
+  `fetchAllParticipating`, `linkedGroupsParticipants`, `updateSubject`,
+  `updateDescription`, `linkGroup`, `unlinkGroup`, `linkedGroups`, `requestList`,
+  `requestUpdate` (approve/reject), `updateParticipant`
+  (add/remove/promote/demote), `joinApprovalMode`, `memberAddMode`,
+  `toggleEphemeral`, `settingUpdate`, `leave` (all under `/community/<op>/{i}`)
 - **Newsletters / Channels** — `create`, `follow`, `unfollow`, `findNewsletter`,
-  `mute`, `unmute`, `updateName`, `updateDescription`, `updatePicture`,
-  `reactionMode`, `sendText`, `reactMessage`, `fetchMessages`, `subscribers`,
-  `adminCount`, `changeOwner`, `demote`, `subscribeUpdates`, `delete` (all under
-  `/newsletter/<op>/{i}`)
+  `subscribed` (channels you follow), `mute`, `unmute`, `updateName`,
+  `updateDescription`, `updatePicture`, `reactionMode`, `sendText`, `reactMessage`,
+  `markViewed`, `fetchMessages`, `subscribers`, `adminCount`, `changeOwner`,
+  `demote`, `subscribeUpdates`, `acceptTOS`, `delete` (all under
+  `/newsletter/<op>/{i}`). Posting **media to a channel** works through the normal
+  `message/sendMedia` and `message/sendText` with a `…@newsletter` target.
 - **Status / Business** — `message/sendStatus`, `chat/findStatusMessage`,
   `business/getCatalog`, `business/getCollections`
 - **Labels, Calls, Settings, Proxy** — `label/findLabels`, `label/handleLabel`,

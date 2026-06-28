@@ -56,6 +56,12 @@ type communityParticipantReq struct {
 	Action       string   `json:"action"` // add|remove|promote|demote
 }
 
+type communityCreateGroupReq struct {
+	CommunityJid string   `json:"communityJid"`
+	Subject      string   `json:"subject"`
+	Participants []string `json:"participants"`
+}
+
 type communityModeReq struct {
 	CommunityJid string `json:"communityJid"`
 	Mode         string `json:"mode"`
@@ -159,6 +165,59 @@ func (s *Server) handleCommunityCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, http.StatusCreated, communityToResp(info))
+}
+
+// handleCommunityCreateGroup: POST /community/createGroup/{instance}
+// {communityJid, subject, participants[]}. Creates a new sub-group under the
+// community and returns its metadata (same shape as /community/create).
+func (s *Server) handleCommunityCreateGroup(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	var req communityCreateGroupReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	jid := communityJidFrom(r, req.CommunityJid)
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "communityJid is required")
+		return
+	}
+	if req.Subject == "" {
+		s.writeError(w, http.StatusBadRequest, "subject is required")
+		return
+	}
+	parts := make([]string, 0, len(req.Participants))
+	for _, p := range req.Participants {
+		if nj := normalizeJID(p); nj != "" {
+			parts = append(parts, nj)
+		}
+	}
+	info, err := s.backend.CommunityCreateGroup(r.Context(), inst, normalizeJID(jid), req.Subject, parts)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, communityToResp(info))
+}
+
+// handleCommunityLinkedGroupsParticipants: GET
+// /community/linkedGroupsParticipants/{instance}?communityJid=. Lists the JIDs of
+// every participant across the community's linked sub-groups.
+func (s *Server) handleCommunityLinkedGroupsParticipants(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	jid := r.URL.Query().Get("communityJid")
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "communityJid query param is required")
+		return
+	}
+	parts, err := s.backend.CommunityLinkedGroupsParticipants(r.Context(), inst, normalizeJID(jid))
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	if parts == nil {
+		parts = []string{}
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{"participants": parts})
 }
 
 // handleCommunityFind: GET /community/findCommunity/{instance}?communityJid=.
@@ -704,4 +763,20 @@ func (b *ManagerBackend) CommunityFetchAllParticipating(ctx context.Context, nam
 		return nil, err
 	}
 	return c.CommunityFetchAllParticipating(ctx)
+}
+
+func (b *ManagerBackend) CommunityCreateGroup(ctx context.Context, name, communityJID, subject string, participants []string) (*wa.GroupInfo, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return nil, err
+	}
+	return c.CommunityCreateGroup(ctx, communityJID, subject, participants)
+}
+
+func (b *ManagerBackend) CommunityLinkedGroupsParticipants(ctx context.Context, name, communityJID string) ([]string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return nil, err
+	}
+	return c.CommunityLinkedGroupsParticipants(ctx, communityJID)
 }

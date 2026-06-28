@@ -346,6 +346,20 @@ func (f *fakeBackend) CommunityFetchAllParticipating(ctx context.Context, name s
 	return f.communityParticipating, nil
 }
 
+func (f *fakeBackend) CommunityCreateGroup(ctx context.Context, name, communityJID, subject string, participants []string) (*wa.GroupInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.communitySubGroups = append(f.communitySubGroups, sentCommunityCreateGroup{communityJID, subject, participants})
+	if f.communitySubGroupInfo != nil {
+		return f.communitySubGroupInfo, nil
+	}
+	return &wa.GroupInfo{JID: "120363999@g.us", Subject: subject}, nil
+}
+
+func (f *fakeBackend) CommunityLinkedGroupsParticipants(ctx context.Context, name, communityJID string) ([]string, error) {
+	return f.communityGroupParts, nil
+}
+
 // --- newsletter admin ---
 
 func (f *fakeBackend) newsletterInfoOr(jid string) *wa.NewsletterInfo {
@@ -403,9 +417,9 @@ func (f *fakeBackend) NewsletterReactionMode(ctx context.Context, name, jid, mod
 	return nil
 }
 
-func (f *fakeBackend) NewsletterFetchMessages(ctx context.Context, name, jid string, count int, since int64) ([]wa.NewsletterMessage, error) {
+func (f *fakeBackend) NewsletterFetchMessages(ctx context.Context, name, jid string, count int, since int64, after int64) ([]wa.NewsletterMessage, error) {
 	f.mu.Lock()
-	f.newsletterFetches = append(f.newsletterFetches, sentNewsletterFetch{jid, count, since})
+	f.newsletterFetches = append(f.newsletterFetches, sentNewsletterFetch{jid, count, since, after})
 	f.mu.Unlock()
 	return f.newsletterMsgs, nil
 }
@@ -458,4 +472,22 @@ func (f *fakeBackend) SendNewsletterText(ctx context.Context, name, jid, text st
 	defer f.mu.Unlock()
 	f.newsletterSends = append(f.newsletterSends, sentNewsletterSend{jid, text})
 	return "SERVERID-1", nil
+}
+
+func (f *fakeBackend) NewsletterSubscribed(ctx context.Context, name string) ([]*wa.NewsletterInfo, error) {
+	return f.newsletterSubscribed, nil
+}
+
+func (f *fakeBackend) AcceptTOSNotice(ctx context.Context, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.acceptTOSCount++
+	return nil
+}
+
+func (f *fakeBackend) NewsletterMarkViewed(ctx context.Context, name, jid string, serverIDs []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.newsletterMarkViewed = append(f.newsletterMarkViewed, sentNewsletterMarkViewed{jid, serverIDs})
+	return nil
 }

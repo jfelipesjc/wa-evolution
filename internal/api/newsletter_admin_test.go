@@ -505,3 +505,92 @@ func TestNewsletterSendText_Validation(t *testing.T) {
 		t.Fatalf("missing jid: status = %d, want 400", rec.Code)
 	}
 }
+
+func TestNewsletterFetchMessages_After(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/newsletter/fetchMessages/bot1?newsletterJid=1234@newsletter&since=50&after=99", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	// The parsed since + after cursors must reach the backend.
+	if len(fb.newsletterFetches) != 1 || fb.newsletterFetches[0].since != 50 || fb.newsletterFetches[0].after != 99 {
+		t.Fatalf("fetch recorded %+v, want since=50 after=99", fb.newsletterFetches)
+	}
+}
+
+func TestNewsletterSubscribed(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	fb.newsletterSubscribed = []*wa.NewsletterInfo{
+		{JID: "111@newsletter", Name: "Canal A", SubscriberCount: 3},
+		{JID: "222@newsletter", Name: "Canal B", SubscriberCount: 9},
+	}
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/newsletter/subscribed/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var out []newsletterResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 2 || out[0].Name != "Canal A" || out[1].JID != "222@newsletter" {
+		t.Fatalf("subscribed = %+v", out)
+	}
+}
+
+func TestNewsletterSubscribed_EmptySerializesArray(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "GET", "/newsletter/subscribed/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.Len() == 0 || rec.Body.Bytes()[0] != '[' {
+		t.Fatalf("empty list must serialize as a JSON array, got %q", rec.Body.String())
+	}
+}
+
+func TestNewsletterAcceptTOS(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/acceptTOS/bot1", testKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if fb.acceptTOSCount != 1 {
+		t.Fatalf("acceptTOSCount = %d, want 1", fb.acceptTOSCount)
+	}
+}
+
+func TestNewsletterMarkViewed(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/markViewed/bot1", testKey, newsletterMarkViewedReq{
+		NewsletterJid: "120@newsletter", ServerIds: []string{"100", "101"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.newsletterMarkViewed) != 1 || fb.newsletterMarkViewed[0].jid != "120@newsletter" ||
+		len(fb.newsletterMarkViewed[0].serverIDs) != 2 || fb.newsletterMarkViewed[0].serverIDs[1] != "101" {
+		t.Fatalf("markViewed = %+v", fb.newsletterMarkViewed)
+	}
+}
+
+func TestNewsletterMarkViewed_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/markViewed/bot1", testKey, newsletterMarkViewedReq{ServerIds: []string{"100"}})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing jid: status = %d, want 400", rec.Code)
+	}
+	rec = do(t, h, "POST", "/newsletter/markViewed/bot1", testKey, newsletterMarkViewedReq{NewsletterJid: "120@newsletter"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty serverIds: status = %d, want 400", rec.Code)
+	}
+}
