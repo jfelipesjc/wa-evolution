@@ -59,6 +59,11 @@ type newsletterReactReq struct {
 	Reaction      string `json:"reaction"`
 }
 
+type newsletterSendTextReq struct {
+	NewsletterJid string `json:"newsletterJid"`
+	Text          string `json:"text"`
+}
+
 // --- response shapes (camelCase, mapped from wa.* types) ---
 
 type newsletterResp struct {
@@ -473,6 +478,32 @@ func (s *Server) handleNewsletterReactMessage(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, http.StatusOK, statusResp{Status: "SUCCESS"})
 }
 
+// handleNewsletterSendText: POST /newsletter/sendText/{instance}
+// {newsletterJid, text}. Posts a text message to the channel and returns its
+// server-assigned id (serverId), usable with /newsletter/reactMessage.
+func (s *Server) handleNewsletterSendText(w http.ResponseWriter, r *http.Request) {
+	inst := r.PathValue("instance")
+	var req newsletterSendTextReq
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	jid := newsletterJidFrom(r, req.NewsletterJid, "")
+	if jid == "" {
+		s.writeError(w, http.StatusBadRequest, "newsletterJid is required")
+		return
+	}
+	if req.Text == "" {
+		s.writeError(w, http.StatusBadRequest, "text is required")
+		return
+	}
+	serverID, err := s.backend.SendNewsletterText(r.Context(), inst, normalizeJID(jid), req.Text)
+	if err != nil {
+		s.writeSendError(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, map[string]string{"serverId": serverID, "status": "PENDING"})
+}
+
 // --- ManagerBackend implementations ---
 
 func (b *ManagerBackend) NewsletterMetadata(ctx context.Context, name, key, keyType string) (*wa.NewsletterInfo, error) {
@@ -607,4 +638,12 @@ func (b *ManagerBackend) NewsletterReactMessage(ctx context.Context, name, jid, 
 		return err
 	}
 	return c.NewsletterReactMessage(ctx, jid, serverID, reaction)
+}
+
+func (b *ManagerBackend) SendNewsletterText(ctx context.Context, name, jid, text string) (string, error) {
+	c, err := b.liveClient(name)
+	if err != nil {
+		return "", err
+	}
+	return c.SendNewsletterText(ctx, jid, text)
 }

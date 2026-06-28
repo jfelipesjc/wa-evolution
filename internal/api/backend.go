@@ -273,6 +273,9 @@ type Backend interface {
 	NewsletterSubscriberCount(ctx context.Context, name, jid string) (int, error)
 	// NewsletterReactMessage reacts to a channel message (emoji ""=remove).
 	NewsletterReactMessage(ctx context.Context, name, jid, serverID, reaction string) error
+	// SendNewsletterText posts a text message to a channel and returns its
+	// server-assigned id (server_id).
+	SendNewsletterText(ctx context.Context, name, jid, text string) (string, error)
 }
 
 // ParticipantResult is the backend-neutral outcome of a group participant update.

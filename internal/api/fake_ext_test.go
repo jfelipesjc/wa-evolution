@@ -452,3 +452,10 @@ func (f *fakeBackend) NewsletterReactMessage(ctx context.Context, name, jid, ser
 	f.newsletterReacts = append(f.newsletterReacts, sentNewsletterReact{jid, serverID, reaction})
 	return nil
 }
+
+func (f *fakeBackend) SendNewsletterText(ctx context.Context, name, jid, text string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.newsletterSends = append(f.newsletterSends, sentNewsletterSend{jid, text})
+	return "SERVERID-1", nil
+}

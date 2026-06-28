@@ -228,6 +228,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /newsletter/delete/{instance}", s.handleNewsletterDelete)
 	s.mux.HandleFunc("GET /newsletter/subscribers/{instance}", s.handleNewsletterSubscribers)
 	s.mux.HandleFunc("POST /newsletter/reactMessage/{instance}", s.handleNewsletterReactMessage)
+	s.mux.HandleFunc("POST /newsletter/sendText/{instance}", s.handleNewsletterSendText)
 
 	// labels
 	s.mux.HandleFunc("GET /label/findLabels/{instance}", s.handleFindLabels)

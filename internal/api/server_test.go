@@ -115,9 +115,11 @@ type fakeBackend struct {
 	newsletterDeletes          []string
 	newsletterSubCount         int
 	newsletterReacts           []sentNewsletterReact
+	newsletterSends            []sentNewsletterSend
 }
 
 type sentNewsletterReact struct{ jid, serverID, reaction string }
+type sentNewsletterSend struct{ jid, text string }
 
 type sentNewsletterFetch struct {
 	jid   string

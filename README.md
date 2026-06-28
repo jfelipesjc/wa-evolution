@@ -92,7 +92,7 @@ curl -X POST localhost:8080/message/sendText/chip1 \
 A built-in web dashboard is served at **`/manager`** (no auth) for eyeballing
 instance state and QR codes.
 
-## API surface (~101 routes)
+## API surface (~102 routes)
 
 Evolution-shaped paths, grouped by area. All take the `apikey` header; the
 `{instance}` segment selects the session.
@@ -124,8 +124,8 @@ Evolution-shaped paths, grouped by area. All take the `apikey` header; the
   (all under `/community/<op>/{i}`)
 - **Newsletters / Channels** — `create`, `follow`, `unfollow`, `findNewsletter`,
   `mute`, `unmute`, `updateName`, `updateDescription`, `updatePicture`,
-  `reactionMode`, `reactMessage`, `fetchMessages`, `subscribers`, `adminCount`,
-  `changeOwner`, `demote`, `subscribeUpdates`, `delete` (all under
+  `reactionMode`, `sendText`, `reactMessage`, `fetchMessages`, `subscribers`,
+  `adminCount`, `changeOwner`, `demote`, `subscribeUpdates`, `delete` (all under
   `/newsletter/<op>/{i}`)
 - **Status / Business** — `message/sendStatus`, `chat/findStatusMessage`,
   `business/getCatalog`, `business/getCollections`

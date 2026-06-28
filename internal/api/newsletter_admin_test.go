@@ -473,3 +473,35 @@ func TestNewsletterReactMessage_Validation(t *testing.T) {
 		t.Fatalf("status = %d, want 400 (no serverId)", rec.Code)
 	}
 }
+
+func TestNewsletterSendText(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/sendText/bot1", testKey, newsletterSendTextReq{NewsletterJid: "120@newsletter", Text: "ola canal"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(fb.newsletterSends) != 1 || fb.newsletterSends[0].jid != "120@newsletter" || fb.newsletterSends[0].text != "ola canal" {
+		t.Fatalf("sends = %+v", fb.newsletterSends)
+	}
+	var out map[string]string
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if out["serverId"] != "SERVERID-1" {
+		t.Fatalf("serverId = %q, want SERVERID-1", out["serverId"])
+	}
+}
+
+func TestNewsletterSendText_Validation(t *testing.T) {
+	fb := newFakeBackend()
+	_ = fb.Create("bot1")
+	h := newTestServer(t, fb)
+	rec := do(t, h, "POST", "/newsletter/sendText/bot1", testKey, newsletterSendTextReq{NewsletterJid: "120@newsletter"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing text: status = %d, want 400", rec.Code)
+	}
+	rec = do(t, h, "POST", "/newsletter/sendText/bot1", testKey, newsletterSendTextReq{Text: "x"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing jid: status = %d, want 400", rec.Code)
+	}
+}
