@@ -259,6 +259,25 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /chatwoot/find/{instance}", s.handleChatwootFind)
 	s.mux.HandleFunc("POST /chatwoot/webhook/{instance}", s.handleChatwootWebhook)
 
+	// --- Evolution canonical path/method aliases ---
+	// The official Evolution API uses these exact paths/verbs; drop-in clients
+	// (the n8n Evolution node, the Chatwoot Evolution channel, the Postman
+	// collection) call them verbatim. Register them alongside our own variants,
+	// pointing at the same handlers, so a strict client never gets a 404.
+	s.mux.HandleFunc("POST /chat/markMessageAsRead/{instance}", s.handleMarkRead)
+	s.mux.HandleFunc("DELETE /group/leaveGroup/{instance}", s.handleLeaveGroup)
+	s.mux.HandleFunc("DELETE /instance/logout/{instance}", s.handleLogout)
+	s.mux.HandleFunc("POST /instance/restart/{instance}", s.handleRestart)
+	s.mux.HandleFunc("GET /group/acceptInviteCode/{instance}", s.handleGroupAcceptInvite)
+	s.mux.HandleFunc("POST /group/updateGroupSubject/{instance}", s.handleGroupUpdateSubject)
+	s.mux.HandleFunc("POST /group/updateGroupDescription/{instance}", s.handleGroupUpdateDescription)
+	s.mux.HandleFunc("POST /group/updateGroupPicture/{instance}", s.handleGroupUpdatePicture)
+	s.mux.HandleFunc("POST /group/updateSetting/{instance}", s.handleGroupUpdateSetting)
+	s.mux.HandleFunc("POST /group/toggleEphemeral/{instance}", s.handleGroupToggleEphemeral)
+	s.mux.HandleFunc("POST /group/revokeInviteCode/{instance}", s.handleGroupRevokeInvite)
+	s.mux.HandleFunc("DELETE /chat/deleteMessageForEveryone/{instance}", s.handleDeleteMessage)
+	s.mux.HandleFunc("POST /chat/updateProfilePicture/{instance}", s.handleUpdateProfilePicture)
+
 	// Manager UI (static single-page dashboard, exempt from apikey auth).
 	s.mux.HandleFunc("GET /manager", s.handleManager)
 	s.mux.HandleFunc("GET /manager/", s.handleManager)

@@ -92,7 +92,17 @@ curl -X POST localhost:8080/message/sendText/chip1 \
 A built-in web dashboard is served at **`/manager`** (no auth) for eyeballing
 instance state and QR codes.
 
-## API surface (~127 routes)
+## API surface (~140 routes)
+
+Full functional parity with the official Evolution API v2 **core** (instance,
+message, chat, group, label, call, business, settings, proxy, webhook,
+chatwoot), plus a community + newsletter surface Evolution does not have. The
+canonical Evolution path/method spellings (e.g. `POST /chat/markMessageAsRead`,
+`DELETE /group/leaveGroup`) are registered as aliases so strict clients (n8n
+node, Chatwoot Evolution channel, Postman) work as a drop-in. Out of scope by
+design: network/bot integrations (typebot/openai/dify/flowise, rabbitmq/sqs/
+websocket, s3) and the Meta-Cloud-API-only `template` controller.
+
 
 Evolution-shaped paths, grouped by area. All take the `apikey` header; the
 `{instance}` segment selects the session.
