@@ -170,7 +170,7 @@ func (cw *chatwootClient) ListInboxes(ctx context.Context) ([]cwInbox, error) {
 	var resp struct {
 		Payload []cwInbox `json:"payload"`
 	}
-	if err := cw.do(ctx, http.MethodGet, cw.acctPath("/inbox_list"), nil, &resp); err != nil {
+	if err := cw.do(ctx, http.MethodGet, cw.acctPath("/inboxes"), nil, &resp); err != nil {
 		return nil, err
 	}
 	return resp.Payload, nil
