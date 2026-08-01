@@ -47,6 +47,35 @@ func run(addr, apikey, dir string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// Fetch the live WhatsApp Web version before any instance connects, so an
+	// expired hardcoded version never silently breaks pairing/login. Best-effort.
+	func() {
+		vctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := wa.RefreshVersion(vctx); err != nil {
+			fmt.Fprintf(os.Stderr, "wa-server: version refresh failed (fallback %v): %v\n", wa.CurrentVersion(), err)
+		} else {
+			fmt.Fprintf(os.Stderr, "wa-server: WhatsApp Web version %v\n", wa.CurrentVersion())
+		}
+	}()
+
+	// Keep the version fresh on long-running processes (WhatsApp expires Web
+	// versions ~every 60 days); reconnects then pick up the new version.
+	go func() {
+		t := time.NewTicker(12 * time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				_ = wa.RefreshVersion(rctx)
+				cancel()
+			}
+		}
+	}()
+
 	mgr := wa.NewManager()
 	mgr.Start(ctx)
 
@@ -81,8 +110,16 @@ func run(addr, apikey, dir string) error {
 			if mev.Reaction != nil {
 				text = mev.Reaction.Text // bridge the reaction emoji ("" un-react -> bridge drops)
 			}
+			// Prefer the sender's phone-number JID when the message was LID-addressed,
+			// so the Chatwoot contact is keyed by the real number (not an opaque
+			// @lid) and agent replies route back correctly. Media download still
+			// uses mev.From (the JID the ChatStore indexed the message under).
+			bridgeJID := mev.From
+			if mev.SenderPN != "" {
+				bridgeJID = mev.SenderPN
+			}
 			im := api.InboundMessage{
-				JID: mev.From, MsgID: mev.ID, PushName: mev.PushName, Text: text,
+				JID: bridgeJID, MsgID: mev.ID, PushName: mev.PushName, Text: text,
 				IsMedia: mev.Media != nil,
 			}
 			if mev.Quoted != nil {
