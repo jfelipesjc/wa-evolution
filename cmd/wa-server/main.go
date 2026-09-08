@@ -33,6 +33,11 @@ func main() {
 	dir := flag.String("dir", "./instances", "directory for per-instance SQLite stores")
 	flag.Parse()
 
+	if os.Getenv("WA_DEBUG") != "" {
+		wa.EnableDebug(os.Stderr)
+		fmt.Fprintln(os.Stderr, "wa-server: pairing debug ENABLED")
+	}
+
 	if err := run(*addr, *apikey, *dir); err != nil {
 		fmt.Fprintf(os.Stderr, "wa-server: %v\n", err)
 		os.Exit(1)
@@ -121,6 +126,10 @@ func run(addr, apikey, dir string) error {
 			im := api.InboundMessage{
 				JID: bridgeJID, MsgID: mev.ID, PushName: mev.PushName, Text: text,
 				IsMedia: mev.Media != nil,
+				// Resposta dada no CELULAR da loja: o WhatsApp espelha para cá e,
+				// sem esta flag, ela entrava no Chatwoot como "incoming" — a
+				// resposta da equipe aparecia como se o cliente tivesse escrito.
+				FromMe: mev.FromMe,
 			}
 			if mev.Quoted != nil {
 				im.QuotedWAID = mev.Quoted.StanzaID // reply linkage (in_reply_to)
