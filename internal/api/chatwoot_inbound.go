@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"regexp"
 	"strconv"
 	"strings"
@@ -108,7 +109,7 @@ func (cw *chatwootClient) CreateTextMessage(ctx context.Context, convID int, con
 // its Chatwoot id. content is optional (sent only when non-empty). When
 // inReplyTo != 0 it sets the content_attributes form field to thread the message
 // as a reply to that Chatwoot message id.
-func (cw *chatwootClient) CreateMediaMessage(ctx context.Context, convID int, content, messageType, sourceID, fileName string, data []byte, inReplyTo int) (int, error) {
+func (cw *chatwootClient) CreateMediaMessage(ctx context.Context, convID int, content, messageType, sourceID, fileName, mimetype string, data []byte, inReplyTo int) (int, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	if content != "" {
@@ -121,7 +122,10 @@ func (cw *chatwootClient) CreateMediaMessage(ctx context.Context, convID int, co
 	if inReplyTo != 0 {
 		_ = mw.WriteField("content_attributes", fmt.Sprintf(`{"in_reply_to":%d}`, inReplyTo))
 	}
-	fw, err := mw.CreateFormFile("attachments[]", fileName)
+	// CreateFormFile fixa application/octet-stream, e o Chatwoot classifica o
+	// anexo pelo Content-Type: sem o tipo real, um áudio do WhatsApp virava
+	// "file.ogg / Baixar" em vez de tocar no player.
+	fw, err := mw.CreatePart(mediaPartHeader(fileName, mimetype))
 	if err != nil {
 		return 0, err
 	}
@@ -307,7 +311,7 @@ func (s *Server) chatwootHandleInbound(ctx context.Context, instance string, m I
 		if fileName == "" {
 			fileName = mediaFileName(mime)
 		}
-		id, err := cw.CreateMediaMessage(ctx, convID, m.Text, messageType, sourceID, fileName, data, inReplyTo)
+		id, err := cw.CreateMediaMessage(ctx, convID, m.Text, messageType, sourceID, fileName, mime, data, inReplyTo)
 		if err != nil {
 			s.logger.Printf("chatwoot inbound %s: create media message: %v", instance, err)
 			return
@@ -406,6 +410,25 @@ func (s *Server) resolveConversation(ctx context.Context, cw *chatwootClient, in
 	s.chatwootCache.conv[key] = convID
 	s.chatwootCache.mu.Unlock()
 	return convID, nil
+}
+
+// mediaPartHeader monta o cabeçalho da parte do anexo com o Content-Type real.
+//
+// O Chatwoot decide o tipo do anexo (áudio, imagem, vídeo, arquivo) pelo
+// Content-Type que recebe; com application/octet-stream tudo vira "arquivo".
+// O áudio do WhatsApp chega como audio/ogg com codecs=opus — o parâmetro extra
+// atrapalha alguns navegadores, então fica só o tipo base.
+func mediaPartHeader(fileName, mimetype string) textproto.MIMEHeader {
+	if i := strings.Index(mimetype, ";"); i >= 0 {
+		mimetype = strings.TrimSpace(mimetype[:i])
+	}
+	if mimetype == "" {
+		mimetype = "application/octet-stream"
+	}
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="attachments[]"; filename=%q`, fileName))
+	h.Set("Content-Type", mimetype)
+	return h
 }
 
 // mediaFileName builds a fallback filename from a mimetype.
