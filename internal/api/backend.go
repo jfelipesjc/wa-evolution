@@ -641,13 +641,38 @@ func (b *ManagerBackend) Delete(name string) error {
 	return closeErr
 }
 
+// Logout ends the session and drops the stored device credentials, leaving the
+// instance registered and back in pairing mode (unlike Delete, which removes it
+// altogether). Wiping the store is what actually logs out: while the creds row
+// survives, the client keeps retrying the old device and WhatsApp answers
+// "login failure: 401" forever instead of offering a QR. The Signal sessions go
+// with it on purpose — a new identity invalidates them, and stale ones are what
+// leave contacts stuck on "Aguardando mensagem".
 func (b *ManagerBackend) Logout(name string) error {
-	if !b.Exists(name) {
+	b.mu.Lock()
+	in, ok := b.instances[name]
+	if ok {
+		delete(b.instances, name)
+	}
+	b.mu.Unlock()
+	if !ok {
 		return ErrInstanceNotFound
 	}
-	// The Manager has no per-instance stop; logout is best-effort a no-op beyond
-	// reporting success (full teardown is Delete). Documented limitation.
-	return nil
+	number := in.pairNumber
+
+	_ = b.mgr.Remove(name)
+	closeErr := in.store.Close()
+	base := filepath.Join(b.dir, name+".db")
+	for _, p := range []string{base, base + "-wal", base + "-shm", base + "-journal"} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			closeErr = err
+		}
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	// Re-register empty so the instance stays addressable and pairs again.
+	return b.createInternal(name, number)
 }
 
 func (b *ManagerBackend) Status() map[string]string {
