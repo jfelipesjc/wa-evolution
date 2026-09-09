@@ -285,6 +285,15 @@ func (s *Server) chatwootHandleInbound(ctx context.Context, instance string, m I
 		return
 	}
 
+	// A MESMA mensagem pode chegar duas vezes: quando não conseguimos decifrar na
+	// primeira entrega, pedimos reenvio, e o WhatsApp manda de novo com o mesmo id.
+	// Sem esta guarda a conversa ganhava a mensagem repetida no painel — visto em
+	// produção na conversa 514 ("Eles não voltam" gravada às 15:41 e às 15:48 com
+	// o mesmo WAID). O Chatwoot recebe o source_id mas não deduplica sozinho.
+	if _, jaExiste := s.chatwootMsgs.chatwootIDForWA(instance, m.MsgID); jaExiste {
+		return
+	}
+
 	messageType := "incoming"
 	if m.FromMe {
 		messageType = "outgoing"
