@@ -422,22 +422,43 @@ func (b *ManagerBackend) ChatStore(name string) *wa.ChatStore { return b.chatSto
 // reenvio, e sem lembrança durável ela virava DUAS mensagens no painel (foi o que
 // a equipe viu na conversa 514 — a reentrega caiu logo após um restart).
 func (b *ManagerBackend) BridgeSeen(name, waID string) (bool, error) {
+	marcador, chave, ok := b.marcadorPonte(name, waID)
+	if !ok {
+		return false, nil
+	}
+	_, visto, err := marcador.LoadSentMessage(chave)
+	return visto, err
+}
+
+// BridgeMarkSeen registra que a mensagem JÁ FOI para o painel.
+//
+// Tem que ser chamado DEPOIS da gravação, nunca antes: marcar na consulta
+// significa que, se a gravação falhar (rede, erro do Chatwoot, download de mídia),
+// a reentrega seguinte é descartada como "já vista" e a mensagem do cliente se
+// perde para sempre — sem log, sem nada no painel.
+func (b *ManagerBackend) BridgeMarkSeen(name, waID string) error {
+	marcador, chave, ok := b.marcadorPonte(name, waID)
+	if !ok {
+		return nil
+	}
+	return marcador.StoreSentMessage(chave, []byte("1"))
+}
+
+type marcadorPonte interface {
+	LoadSentMessage(string) ([]byte, bool, error)
+	StoreSentMessage(string, []byte) error
+}
+
+func (b *ManagerBackend) marcadorPonte(name, waID string) (marcadorPonte, string, bool) {
 	in, ok := b.get(name)
 	if !ok || waID == "" {
-		return false, nil
+		return nil, "", false
 	}
-	marcador, ok2 := in.store.(interface {
-		LoadSentMessage(string) ([]byte, bool, error)
-		StoreSentMessage(string, []byte) error
-	})
-	if !ok2 {
-		return false, nil
+	m, ok := in.store.(marcadorPonte)
+	if !ok {
+		return nil, "", false
 	}
-	chave := "bridge:" + waID
-	if _, visto, err := marcador.LoadSentMessage(chave); err != nil || visto {
-		return visto, err
-	}
-	return false, marcador.StoreSentMessage(chave, []byte("1"))
+	return m, "bridge:" + waID, true
 }
 
 // SetQR records the latest QR code for an instance (called by the event pump).

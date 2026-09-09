@@ -354,6 +354,15 @@ func (s *Server) chatwootHandleInbound(ctx context.Context, instance string, m I
 		FromMe:    m.FromMe,
 		Text:      m.Text,
 	})
+	// Só agora a mensagem está no painel: marcar antes faria uma falha na gravação
+	// virar perda definitiva, porque a reentrega seria descartada como repetida.
+	if marcador, ok := s.backend.(interface {
+		BridgeMarkSeen(instance, waID string) error
+	}); ok {
+		if err := marcador.BridgeMarkSeen(instance, m.MsgID); err != nil {
+			s.logger.Printf("chatwoot inbound %s: marcar mensagem %s: %v", instance, m.MsgID, err)
+		}
+	}
 	// TODO(phase 4+): reactions, interactive (PIX) buttons, CTWA ads.
 }
 

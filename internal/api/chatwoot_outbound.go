@@ -144,7 +144,21 @@ func (s *Server) chatwootProcessWebhook(ctx context.Context, instance string, cf
 	if body.Private {
 		return
 	}
-	if body.Event == "message_updated" && !body.ContentAttributes.Deleted {
+	if body.Event == "message_updated" {
+		if !body.ContentAttributes.Deleted {
+			return
+		}
+		// Apagar no painel precisa APAGAR no WhatsApp. Sem este ramo o fluxo seguia
+		// para o envio normal lá embaixo e REENVIAVA o texto: o atendente apagava a
+		// mensagem errada e o cliente a recebia duas vezes. Sair sem fazer nada já
+		// seria melhor que reenviar; revogar é o certo.
+		if ref, ok := s.chatwootMsgs.waRefForChatwootID(instance, body.ID); ok && ref.WAID != "" {
+			if _, err := s.backend.DeleteMessage(ctx, instance, ref.RemoteJID, ref.WAID, ref.FromMe); err != nil {
+				s.logger.Printf("chatwoot webhook %s: apagar no whatsapp %s: %v", instance, ref.WAID, err)
+			}
+		} else {
+			s.logger.Printf("chatwoot webhook %s: apagada no painel a mensagem %d, sem WAID conhecido — nada a revogar", instance, body.ID)
+		}
 		return
 	}
 
