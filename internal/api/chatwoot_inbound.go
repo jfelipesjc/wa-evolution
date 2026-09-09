@@ -293,6 +293,15 @@ func (s *Server) chatwootHandleInbound(ctx context.Context, instance string, m I
 	if _, jaExiste := s.chatwootMsgs.chatwootIDForWA(instance, m.MsgID); jaExiste {
 		return
 	}
+	// O mapa acima vive em memória e some no restart — e a reentrega costuma cair
+	// logo depois de um. A marca no banco da instância é o que segura de verdade.
+	if marcador, ok := s.backend.(interface {
+		BridgeSeen(instance, waID string) (bool, error)
+	}); ok {
+		if visto, err := marcador.BridgeSeen(instance, m.MsgID); err == nil && visto {
+			return
+		}
+	}
 
 	messageType := "incoming"
 	if m.FromMe {

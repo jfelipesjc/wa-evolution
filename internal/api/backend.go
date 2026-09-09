@@ -416,6 +416,30 @@ func (b *ManagerBackend) Restore() ([]string, error) {
 // returns nil for unknown instances.
 func (b *ManagerBackend) ChatStore(name string) *wa.ChatStore { return b.chatStore(name) }
 
+// BridgeSeen diz se uma mensagem do WhatsApp já foi levada para o Chatwoot, e
+// registra as novas. Fica no banco da instância, e não em memória, porque o
+// serviço reinicia: o WhatsApp reentrega a mesma mensagem depois de um pedido de
+// reenvio, e sem lembrança durável ela virava DUAS mensagens no painel (foi o que
+// a equipe viu na conversa 514 — a reentrega caiu logo após um restart).
+func (b *ManagerBackend) BridgeSeen(name, waID string) (bool, error) {
+	in, ok := b.get(name)
+	if !ok || waID == "" {
+		return false, nil
+	}
+	marcador, ok2 := in.store.(interface {
+		LoadSentMessage(string) ([]byte, bool, error)
+		StoreSentMessage(string, []byte) error
+	})
+	if !ok2 {
+		return false, nil
+	}
+	chave := "bridge:" + waID
+	if _, visto, err := marcador.LoadSentMessage(chave); err != nil || visto {
+		return visto, err
+	}
+	return false, marcador.StoreSentMessage(chave, []byte("1"))
+}
+
 // SetQR records the latest QR code for an instance (called by the event pump).
 func (b *ManagerBackend) SetQR(name, code string) { b.setQR(name, code) }
 
