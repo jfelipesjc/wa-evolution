@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -42,6 +43,29 @@ func main() {
 		fmt.Fprintf(os.Stderr, "wa-server: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// numeroDaInstancia devolve os dígitos do número pareado na instância ("" se
+// ainda não pareou).
+func numeroDaInstancia(backend *api.ManagerBackend, instance string) string {
+	numero, _ := backend.OwnProfile(instance)
+	return numero
+}
+
+// mesmoNumero compara dois endereços do WhatsApp só pelos dígitos, ignorando o
+// sufixo de aparelho (":12") e o domínio (@s.whatsapp.net / @lid).
+func mesmoNumero(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return soDigitosJID(a) == soDigitosJID(b)
+}
+
+func soDigitosJID(jid string) string {
+	if i := strings.IndexAny(jid, ":@"); i >= 0 {
+		jid = jid[:i]
+	}
+	return jid
 }
 
 func run(addr, apikey, dir string) error {
@@ -115,16 +139,38 @@ func run(addr, apikey, dir string) error {
 			if mev.Reaction != nil {
 				text = mev.Reaction.Text // bridge the reaction emoji ("" un-react -> bridge drops)
 			}
-			// Prefer the sender's phone-number JID when the message was LID-addressed,
-			// so the Chatwoot contact is keyed by the real number (not an opaque
-			// @lid) and agent replies route back correctly. Media download still
-			// uses mev.From (the JID the ChatStore indexed the message under).
+			// QUAL CONVERSA recebe a mensagem no painel.
+			//
+			// 1) Resposta dada no CELULAR da loja chega espelhada com o nosso
+			//    próprio número como remetente; a conversa certa é a do
+			//    DESTINATÁRIO (DestinationJID), nunca a da loja com ela mesma.
+			// 2) O WhatsApp passou a endereçar contatos por LID ("196...@lid"),
+			//    que não é telefone de ninguém: preferimos o número real
+			//    (SenderPN) para o contato do painel nascer com o telefone certo
+			//    e a resposta do atendente voltar para o cliente.
+			// 3) Nas mensagens espelhadas o SenderPN pode vir sendo o número da
+			//    PRÓPRIA loja — usá-lo jogaria as respostas de vários clientes
+			//    numa única conversa da loja consigo mesma (foi o que aconteceu
+			//    na conversa 337 do painel).
+			// O download da mídia continua usando mev.From, que é a chave sob a
+			// qual o ChatStore guardou a mensagem.
 			bridgeJID := mev.From
-			if mev.SenderPN != "" {
+			if mev.FromMe && mev.DestinationJID != "" {
+				bridgeJID = mev.DestinationJID
+			}
+			if mev.SenderPN != "" && !mesmoNumero(mev.SenderPN, numeroDaInstancia(backend, instance)) {
 				bridgeJID = mev.SenderPN
 			}
+			// O pushName de uma mensagem espelhada é o nome da PRÓPRIA loja, não o
+			// do cliente: usá-lo batizava o contato novo de "Ski In Chile" (o
+			// painel tem dezenas de contatos assim). Sem nome, a ponte usa o
+			// número, que a equipe reconhece.
+			nomeExibido := mev.PushName
+			if mev.FromMe {
+				nomeExibido = ""
+			}
 			im := api.InboundMessage{
-				JID: bridgeJID, MsgID: mev.ID, PushName: mev.PushName, Text: text,
+				JID: bridgeJID, MsgID: mev.ID, PushName: nomeExibido, Text: text,
 				IsMedia: mev.Media != nil,
 				// Resposta dada no CELULAR da loja: o WhatsApp espelha para cá e,
 				// sem esta flag, ela entrava no Chatwoot como "incoming" — a

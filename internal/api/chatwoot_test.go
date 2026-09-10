@@ -25,6 +25,14 @@ func newMockChatwoot() *mockChatwoot { return &mockChatwoot{nextID: 100} }
 
 func (m *mockChatwoot) handler() http.Handler {
 	mux := http.NewServeMux()
+	// O código de produção lê a lista de inboxes em GET /inboxes; o mock só
+	// respondia /inbox_list, e por isso a ponte não achava a inbox nos testes.
+	mux.HandleFunc("GET /api/v1/accounts/{acct}/inboxes", func(w http.ResponseWriter, r *http.Request) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.lastToken = r.Header.Get("api_access_token")
+		_ = json.NewEncoder(w).Encode(map[string]any{"payload": m.inboxes})
+	})
 	mux.HandleFunc("GET /api/v1/accounts/{acct}/inbox_list", func(w http.ResponseWriter, r *http.Request) {
 		m.mu.Lock()
 		defer m.mu.Unlock()

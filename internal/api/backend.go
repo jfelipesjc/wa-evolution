@@ -416,6 +416,33 @@ func (b *ManagerBackend) Restore() ([]string, error) {
 // returns nil for unknown instances.
 func (b *ManagerBackend) ChatStore(name string) *wa.ChatStore { return b.chatStore(name) }
 
+// PhoneForLID traduz um identificador @lid para o JID de telefone
+// (@s.whatsapp.net) do mesmo contato, quando a sessão já aprendeu essa ligação.
+//
+// O WhatsApp passou a endereçar contatos por LID ("196...@lid"), que NÃO é o
+// telefone de ninguém. Se a ponte levar o LID para o Chatwoot, a loja ganha um
+// contato com um "número" inventado e a resposta do painel não chega ao cliente.
+// A tradução é aprendida das próprias mensagens (sender_pn/participant_pn), então
+// pode não existir ainda — daí o ok=false, e o chamador segue com o LID mesmo.
+func (b *ManagerBackend) PhoneForLID(name, lid string) (string, bool) {
+	if lid == "" || !strings.Contains(lid, "@lid") {
+		return "", false
+	}
+	in, ok := b.get(name)
+	if !ok || in.mc == nil {
+		return "", false
+	}
+	cli, ok := in.mc.Client()
+	if !ok || cli == nil {
+		return "", false
+	}
+	pn, ok := cli.PNForLID(lid)
+	if !ok || pn == "" {
+		return "", false
+	}
+	return pn, true
+}
+
 // BridgeSeen diz se uma mensagem do WhatsApp já foi levada para o Chatwoot, e
 // registra as novas. Fica no banco da instância, e não em memória, porque o
 // serviço reinicia: o WhatsApp reentrega a mesma mensagem depois de um pedido de

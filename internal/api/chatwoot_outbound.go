@@ -177,7 +177,7 @@ func (s *Server) chatwootProcessWebhook(ctx context.Context, instance string, cf
 	if body.MessageType == "template" && body.Event == "message_created" {
 		text := strings.ReplaceAll(body.Content, "\r\n", "\n")
 		if chatId != "" && text != "" {
-			jid := normalizeJID(chatId)
+			jid := s.jidDestino(instance, chatId)
 			if _, err := s.backend.SendText(ctx, instance, jid, text); err != nil {
 				s.logger.Printf("chatwoot webhook %s: template send: %v", instance, err)
 			}
@@ -215,7 +215,7 @@ func (s *Server) chatwootProcessWebhook(ctx context.Context, instance string, cf
 		formatText = strings.Join(parts, delimiter)
 	}
 
-	jid := normalizeJID(chatId)
+	jid := s.jidDestino(instance, chatId)
 
 	// Note on the second-layer echo prevention (isIntegration flag in Evolution):
 	// our inbound bridge only mirrors RECEIVED wa.MessageEvents into Chatwoot, never
@@ -272,6 +272,43 @@ func (s *Server) chatwootProcessWebhook(ctx context.Context, instance string, cf
 	}
 	// NOTE: local DB id-mapping for media replies and markMessageAsRead are skipped
 	// — media replies don't carry a quote in this phase.
+}
+
+// jidDestino decide para QUAL endereço do WhatsApp vai a resposta do painel.
+//
+// O Chatwoot devolve o identifier/phone_number do contato. Se aquele contato
+// nasceu de um endereço @lid (o identificador novo do WhatsApp, que não é
+// telefone), o caminho antigo montava "100000000000005@s.whatsapp.net" — um
+// número que não existe — e a resposta do atendente simplesmente não chegava ao
+// cliente (foi o caso da conversa 557: o cliente escreveu, a atendente respondeu
+// no painel e teve de repetir a resposta pelo celular). Aqui traduzimos o LID
+// para o número real quando a sessão já conhece a ligação; sem tradução,
+// mandamos para o próprio @lid, que o WhatsApp entende, em vez de um número
+// inventado.
+func (s *Server) jidDestino(instance, chatId string) string {
+	jid := normalizeJID(chatId)
+	tradutor, ok := s.backend.(interface {
+		PhoneForLID(name, lid string) (string, bool)
+	})
+	if !ok {
+		return jid
+	}
+	if strings.Contains(jid, "@lid") {
+		if pn, ok := tradutor.PhoneForLID(instance, jid); ok && pn != "" {
+			return pn
+		}
+		return jid
+	}
+	// Contato criado antes desta correção guardou o LID como se fosse telefone
+	// (phone_number "+100000000000005", sem identifier). LID tem 14 dígitos ou
+	// mais; se existir tradução para esse número, ele era um LID.
+	digitos := soDigitos(jid)
+	if len(digitos) >= 14 {
+		if pn, ok := tradutor.PhoneForLID(instance, digitos+"@lid"); ok && pn != "" {
+			return pn
+		}
+	}
+	return jid
 }
 
 // chatwootSendAttachment downloads an attachment and forwards it to WhatsApp,

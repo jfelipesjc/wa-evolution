@@ -55,6 +55,13 @@ func newFullMock() *fullMockChatwoot {
 func (m *fullMockChatwoot) handler() http.Handler {
 	mux := http.NewServeMux()
 
+	// O código de produção lê a lista de inboxes em GET /inboxes; o mock só
+	// respondia /inbox_list, e por isso a ponte não achava a inbox nos testes.
+	mux.HandleFunc("GET /api/v1/accounts/{acct}/inboxes", func(w http.ResponseWriter, r *http.Request) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"payload": m.inboxes})
+	})
 	mux.HandleFunc("GET /api/v1/accounts/{acct}/inbox_list", func(w http.ResponseWriter, r *http.Request) {
 		m.mu.Lock()
 		defer m.mu.Unlock()
@@ -234,7 +241,7 @@ func TestChatwootHandleInbound_CreatesEverything(t *testing.T) {
 	})
 
 	srv.chatwootHandleInbound(context.Background(), "bot1", InboundMessage{
-		JID:      "5512981201631@s.whatsapp.net",
+		JID:      "5512999998888@s.whatsapp.net",
 		FromMe:   false,
 		MsgID:    "ABC123",
 		PushName: "Felipe",
@@ -267,16 +274,16 @@ func TestChatwootHandleInbound_CreatesEverything(t *testing.T) {
 
 	// contact create body: phone_number set (jid has '@'), identifier = full jid.
 	cr := mock.createReqs[0]
-	if cr["phone_number"] != "+5512981201631" {
+	if cr["phone_number"] != "+5512999998888" {
 		t.Fatalf("phone_number = %v", cr["phone_number"])
 	}
-	if cr["identifier"] != "5512981201631@s.whatsapp.net" {
+	if cr["identifier"] != "5512999998888@s.whatsapp.net" {
 		t.Fatalf("identifier = %v", cr["identifier"])
 	}
 
 	// Second message reuses cached contact+conversation (no new create).
 	srv.chatwootHandleInbound(context.Background(), "bot1", InboundMessage{
-		JID: "5512981201631@s.whatsapp.net", MsgID: "DEF456", Text: "again",
+		JID: "5512999998888@s.whatsapp.net", MsgID: "DEF456", Text: "again",
 	})
 	if mock.createCount != 1 {
 		t.Fatalf("second message re-created contact: createCount = %d", mock.createCount)
@@ -296,7 +303,7 @@ func TestChatwootHandleInbound_Outgoing(t *testing.T) {
 		Enabled: true, AccountID: "1", Token: "tok", NameInbox: "bot1",
 	})
 	srv.chatwootHandleInbound(context.Background(), "bot1", InboundMessage{
-		JID: "5512981201631@s.whatsapp.net", FromMe: true, MsgID: "X", Text: "hi",
+		JID: "5512999998888@s.whatsapp.net", FromMe: true, MsgID: "X", Text: "hi",
 	})
 	if len(mock.messages) != 1 || mock.messages[0]["message_type"] != "outgoing" {
 		t.Fatalf("expected one outgoing message, got %#v", mock.messages)
@@ -336,7 +343,7 @@ func TestChatwootHandleInbound_Disabled(t *testing.T) {
 	mock := newFullMock()
 	srv, _ := newInboundServer(t, mock, chatwootConfig{Enabled: false, AccountID: "1", Token: "t", NameInbox: "bot1"})
 	srv.chatwootHandleInbound(context.Background(), "bot1", InboundMessage{
-		JID: "5512981201631@s.whatsapp.net", MsgID: "Z", Text: "x",
+		JID: "5512999998888@s.whatsapp.net", MsgID: "Z", Text: "x",
 	})
 	if len(mock.messages) != 0 {
 		t.Fatalf("disabled config still posted a message")
@@ -350,7 +357,7 @@ func TestChatwootHandleInbound_Media(t *testing.T) {
 		Enabled: true, AccountID: "1", Token: "tok", NameInbox: "bot1",
 	})
 	srv.chatwootHandleInbound(context.Background(), "bot1", InboundMessage{
-		JID:      "5512981201631@s.whatsapp.net",
+		JID:      "5512999998888@s.whatsapp.net",
 		MsgID:    "M1",
 		Text:     "caption here",
 		IsMedia:  true,
@@ -373,13 +380,13 @@ func TestChatwootHandleInbound_ReuseExistingConversation(t *testing.T) {
 	mock := newFullMock()
 	mock.inboxes = []cwInbox{{ID: 50, Name: "bot1"}}
 	// Pre-existing open conversation in the inbox for a known contact.
-	mock.contacts = []cwContact{{ID: 201, Identifier: "5512981201631@s.whatsapp.net", PhoneNumber: "+5512981201631"}}
+	mock.contacts = []cwContact{{ID: 201, Identifier: "5512999998888@s.whatsapp.net", PhoneNumber: "+5512999998888"}}
 	mock.conversations = []cwConversation{{ID: 777, InboxID: 50, Status: "open"}}
 	srv, _ := newInboundServer(t, mock, chatwootConfig{
 		Enabled: true, AccountID: "1", Token: "tok", NameInbox: "bot1", MergeBrazilContacts: true,
 	})
 	srv.chatwootHandleInbound(context.Background(), "bot1", InboundMessage{
-		JID: "5512981201631@s.whatsapp.net", MsgID: "R1", Text: "hello",
+		JID: "5512999998888@s.whatsapp.net", MsgID: "R1", Text: "hello",
 	})
 	if mock.createCount != 0 {
 		t.Fatalf("existing contact was re-created")
@@ -400,7 +407,7 @@ func TestChatwootHandleInbound_QuotedReplyLinkage(t *testing.T) {
 		MergeBrazilContacts: true, IgnoreJids: []string{"@g.us"},
 	})
 	ctx := context.Background()
-	jid := "5512981201631@s.whatsapp.net"
+	jid := "5512999998888@s.whatsapp.net"
 
 	// First message: bridged, records WAID(WA1) -> chatwoot id 900 (mock.nextMsg).
 	srv.chatwootHandleInbound(ctx, "bot1", InboundMessage{

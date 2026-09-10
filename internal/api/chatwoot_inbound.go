@@ -184,10 +184,34 @@ type chatwootInboundCache struct {
 	mu      sync.Mutex
 	contact map[string]int // key: instance|jid
 	conv    map[string]int // key: instance|jid
+	// emVoo marca as mensagens que estão SENDO gravadas neste momento. Cada
+	// mensagem do WhatsApp é tratada numa goroutine própria; quando a mesma
+	// chegava duas vezes quase junto, as duas passavam pela checagem de
+	// "já vista" antes de qualquer uma gravar, e a fala do cliente aparecia
+	// repetida no painel.
+	emVoo map[string]bool // key: instance|waID
 }
 
 func newChatwootInboundCache() *chatwootInboundCache {
-	return &chatwootInboundCache{contact: map[string]int{}, conv: map[string]int{}}
+	return &chatwootInboundCache{contact: map[string]int{}, conv: map[string]int{}, emVoo: map[string]bool{}}
+}
+
+// entrarEmVoo reserva o tratamento de uma mensagem; devolve false se outra
+// goroutine já está gravando a MESMA mensagem (então esta deve desistir).
+func (c *chatwootInboundCache) entrarEmVoo(chave string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.emVoo[chave] {
+		return false
+	}
+	c.emVoo[chave] = true
+	return true
+}
+
+func (c *chatwootInboundCache) sairDeVoo(chave string) {
+	c.mu.Lock()
+	delete(c.emVoo, chave)
+	c.mu.Unlock()
 }
 
 var deviceSuffixRe = regexp.MustCompile(`:\d+`)
@@ -204,6 +228,52 @@ func normalizeJid(jid string) string {
 	}
 	jid = deviceSuffixRe.ReplaceAllString(jid, "")
 	return strings.SplitN(jid, "@", 2)[0]
+}
+
+// soDigitos devolve só a parte de usuário de um JID (sem sufixo de aparelho
+// ":12" e sem o "@dominio").
+func soDigitos(jid string) string {
+	jid = deviceSuffixRe.ReplaceAllString(jid, "")
+	return strings.SplitN(jid, "@", 2)[0]
+}
+
+// canonizarJID troca um endereço @lid pelo JID de telefone do mesmo contato,
+// quando a sessão do WhatsApp já conhece essa ligação.
+//
+// Efeito prático para a loja: sem isso o cliente entra no painel como um contato
+// novo com um "número" que não existe (ex.: +100000000000005), separado do
+// contato antigo dele, e a resposta do atendente não chega em lugar nenhum.
+// Quando a tradução ainda não é conhecida, seguimos com o próprio @lid — perder
+// a mensagem do cliente seria pior do que gravá-la num contato imperfeito.
+func (s *Server) canonizarJID(instance, jid string) string {
+	if !strings.Contains(jid, "@lid") {
+		return jid
+	}
+	tradutor, ok := s.backend.(interface {
+		PhoneForLID(name, lid string) (string, bool)
+	})
+	if !ok {
+		return jid
+	}
+	if pn, ok := tradutor.PhoneForLID(instance, jid); ok && pn != "" {
+		return pn
+	}
+	return jid
+}
+
+// ehNumeroDaPropriaLoja diz se o JID é o número da própria instância.
+//
+// Mensagem enviada pelo CELULAR da loja chega espelhada para cá; se o endereço
+// usado for o nosso próprio número, a ponte abre uma conversa da loja COM ELA
+// MESMA e joga lá dentro as respostas dadas a vários clientes diferentes — foi
+// o que aconteceu na conversa 337 do painel (58 mensagens de clientes distintos
+// no mesmo lugar). Nesse caso é melhor não gravar nada.
+func (s *Server) ehNumeroDaPropriaLoja(instance, jid string) bool {
+	proprio, _ := s.backend.OwnProfile(instance)
+	if proprio == "" {
+		return false
+	}
+	return soDigitos(jid) == soDigitos(proprio)
 }
 
 // HandleChatwootInbound is the exported entry the host event pump calls for each
@@ -253,6 +323,26 @@ func (s *Server) chatwootHandleInbound(ctx context.Context, instance string, m I
 	// Nothing to deliver?
 	if !m.IsMedia && m.Text == "" {
 		return
+	}
+
+	// Identidade do contato: LID -> número de telefone, antes de qualquer busca no
+	// Chatwoot. É o que garante que o cliente caia no contato/conversa que já
+	// existe, em vez de virar um contato novo com um número inventado.
+	m.JID = s.canonizarJID(instance, m.JID)
+	if s.ehNumeroDaPropriaLoja(instance, m.JID) {
+		s.logger.Printf("chatwoot inbound %s: mensagem %s endereçada ao próprio número da loja — ignorada para não abrir conversa da loja com ela mesma", instance, m.MsgID)
+		return
+	}
+
+	// Trava por mensagem: duas entregas da mesma mensagem são tratadas em
+	// goroutines paralelas, e sem isto ambas passavam pela checagem de duplicidade
+	// antes de qualquer uma gravar.
+	if m.MsgID != "" {
+		chaveVoo := instance + "|" + m.MsgID
+		if !s.chatwootCache.entrarEmVoo(chaveVoo) {
+			return
+		}
+		defer s.chatwootCache.sairDeVoo(chaveVoo)
 	}
 
 	cw := newChatwootClient(cfg)
