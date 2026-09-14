@@ -131,8 +131,18 @@ func (s *Server) handleChatwootWebhook(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(chatwootWebhookDelay)
 	}
 
-	s.chatwootProcessWebhook(r.Context(), instance, cfg, body)
+	// O Chatwoot desiste da chamada do webhook em poucos segundos e o Go cancela
+	// r.Context() junto — o que abortava o download do anexo e o upload pro
+	// WhatsApp no meio ("context canceled"; texto passava, foto não). O trabalho
+	// segue num contexto próprio, com o prazo que mídia grande precisa.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), chatwootWebhookWork)
+	defer cancel()
+	s.chatwootProcessWebhook(ctx, instance, cfg, body)
 }
+
+// chatwootWebhookWork é o prazo para processar um webhook do Chatwoot
+// (download do anexo + upload pro WhatsApp), independente da conexão HTTP.
+const chatwootWebhookWork = 3 * time.Minute
 
 // chatwootProcessWebhook runs the receiveWebhook branch logic. It never returns an
 // error — failures are logged or posted back as private notes.
